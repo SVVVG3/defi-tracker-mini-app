@@ -76,30 +76,69 @@ For direct API testing, visit http://localhost:3000/test to:
 - Test custom wallet addresses
 - Test the monitoring endpoint
 
+## GitHub Setup
+
+If you're setting up this project from scratch:
+
+1. Initialize a Git repository:
+   ```
+   git init
+   git add .
+   git commit -m "Initial commit for DeFi Position Tracker mini-app"
+   ```
+
+2. Create a new repository on GitHub:
+   - Go to GitHub.com and log in
+   - Click "New repository" 
+   - Name it "defi-tracker-mini-app"
+   - Do NOT initialize with README, .gitignore, or license files
+
+3. Connect your local repository:
+   ```
+   git remote add origin https://github.com/yourusername/defi-tracker-mini-app.git
+   git branch -M main
+   git push -u origin main
+   ```
+
 ## Deployment
 
 ### Environment Setup
 
-1. Create a `.env.production` file with production values
-2. Configure the environment variables in the Vercel dashboard
+1. Create a `.env.production` file with production values similar to `.env.local` but with production URLs and API keys
+2. Configure the following environment variables in the Vercel dashboard:
+   - `NEYNAR_API_KEY`
+   - `ZAPPER_API_KEY`
+   - `JWT_SECRET`
+   - `NEXT_PUBLIC_BASE_URL` (your production URL)
+   - `MONITOR_API_KEY`
 
 ### Vercel Deployment
 
-1. Connect your GitHub repository to Vercel
-2. Configure the build settings:
-   - Framework Preset: Next.js
-   - Build Command: `npm run build`
+1. Connect your GitHub repository to Vercel:
+   - Log in to Vercel and click "Add New Project"
+   - Select your GitHub repository
+   - Configure the build settings:
+     - Framework Preset: Next.js
+     - Build Command: `npm run build`
+     - Output Directory: `.next`
+     - Install Command: `npm install`
 
-3. Add environment variables in the Vercel dashboard
-4. Deploy the application
+2. Add environment variables in the Vercel dashboard from your `.env.production` file
 
-### Background Jobs
+3. Deploy the application by clicking "Deploy"
 
-The position monitoring job needs to be set up separately:
+### Setting Up Cron Jobs
 
-1. Use Vercel Cron Jobs or a service like Upstash
-2. Schedule regular calls to the monitoring endpoint
-3. Ensure the service has the necessary API keys
+To monitor positions automatically, set up cron jobs:
+
+1. In Vercel dashboard, go to "Settings" > "Cron Jobs"
+2. Add a new cron job:
+   - Name: "Monitor Positions"
+   - URL: `/api/cron-monitor`
+   - Schedule: `0 */3 * * *` (runs every 3 hours)
+   - HTTP Method: POST
+   - Headers:
+     - `Authorization`: `Bearer YOUR_MONITOR_API_KEY`
 
 ## API Documentation
 
@@ -119,7 +158,16 @@ The position monitoring job needs to be set up separately:
 ### Monitoring Endpoints
 
 - `POST /api/monitor` - Check positions and send notifications if needed
+- `POST /api/cron-monitor` - Secured endpoint for cron job monitoring
+
+### Test Endpoints
+
+- `POST /api/test/auth` - Test authentication without Farcaster client
+- `GET /api/test/positions` - Test position fetching with authentication
+- `GET /api/test/positions-standalone` - Test position fetching without authentication
+- `POST /api/test/monitor` - Test position monitoring with authentication
+- `GET /api/test/monitor-standalone` - Test position monitoring without authentication
 
 ## License
 
-[MIT License](LICENSE) 
+[MIT License](LICENSE)# defi-tracker-mini-app
