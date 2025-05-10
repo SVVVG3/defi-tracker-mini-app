@@ -2,6 +2,11 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 import { fetchPositionsFromZapper, findOutOfRangePositions } from '../../utils/positions';
 
+/**
+ * DEPRECATED: This cron-based monitoring system has been replaced by the WebSocket-based real-time monitoring system.
+ * Please use the WebSocket server located in src/websocket/ for real-time monitoring.
+ */
+
 // This would be a secure API key for production use
 const MONITOR_API_KEY = process.env.MONITOR_API_KEY || 'development-key';
 
@@ -9,6 +14,16 @@ const MONITOR_API_KEY = process.env.MONITOR_API_KEY || 'development-key';
 const positionStatusCache: Record<string, boolean> = {};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Return a message indicating this endpoint is deprecated
+  return res.status(200).json({
+    success: false,
+    deprecated: true,
+    message: "This monitoring API has been deprecated in favor of the WebSocket-based real-time monitoring system.",
+    alternative: "Please use the WebSocket server for real-time monitoring."
+  });
+
+  // The code below is kept for reference but will not execute
+  /*
   // Only allow POST requests with proper authorization
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -77,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Error in monitor service:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
+  */
 }
 
 // Helper function to send notifications only when a position changes state

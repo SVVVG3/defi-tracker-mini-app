@@ -39,11 +39,5 @@
     "NEXT_PUBLIC_ENABLE_TEST_ENDPOINTS": "false"
   },
   "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "crons": [
-    {
-      "path": "/api/cron-monitor",
-      "schedule": "0 */6 * * *"
-    }
-  ]
+  "devCommand": "npm run dev"
 } 

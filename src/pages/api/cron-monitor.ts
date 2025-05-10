@@ -3,10 +3,23 @@ import { withErrorHandler, ApiError } from '../../utils/api-error-handler';
 import axios from 'axios';
 
 /**
+ * DEPRECATED: This cron-based monitoring system has been replaced by the WebSocket-based real-time monitoring system.
+ * Please use the WebSocket server located in src/websocket/ for real-time monitoring.
+ * 
  * This endpoint is called by Vercel Cron Jobs to monitor positions and send notifications.
  * It securely calls the main monitor API internally.
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Return a message indicating this endpoint is deprecated
+  return res.status(200).json({
+    success: false,
+    deprecated: true,
+    message: "This cron-based monitoring system has been deprecated in favor of the WebSocket-based real-time monitoring system.",
+    alternative: "Please use the WebSocket server for real-time monitoring."
+  });
+
+  // The code below is kept for reference but will not execute
+  /*
   // Only allow POST method
   if (req.method !== 'POST') {
     throw ApiError.badRequest('Method not allowed', 'METHOD_NOT_ALLOWED');
@@ -73,6 +86,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     
     throw ApiError.internal('Failed to run monitoring job', 'MONITOR_ERROR');
   }
+  */
 }
 
 // Export with error handling
