@@ -56,13 +56,7 @@ export default function Home() {
         
         if (inFrame) {
           setIsInFrame(true);
-          // Call ready() immediately to dismiss splash screen
-          try {
-            await sdk.actions.ready();
-            console.log('Successfully called ready()');
-          } catch (readyError) {
-            console.error('Error calling ready():', readyError);
-          }
+          // Don't call ready() here - we'll call it after content is loaded
         } else {
           console.log('Not running in a Farcaster Frame. SDK context:', sdk.context);
           setIsInFrame(false);
@@ -78,6 +72,22 @@ export default function Home() {
 
     loadSDK();
   }, []);
+
+  // New useEffect to call ready() when content is loaded
+  useEffect(() => {
+    const callReady = async () => {
+      if (isInFrame && frameSdk && !isLoading) {
+        try {
+          await frameSdk.actions.ready();
+          console.log('Successfully called ready() after content loaded');
+        } catch (readyError) {
+          console.error('Error calling ready():', readyError);
+        }
+      }
+    };
+
+    callReady();
+  }, [isInFrame, frameSdk, isLoading]);
 
   // Enable developer mode
   const enableDevMode = () => {
