@@ -1,390 +1,43 @@
 import { useEffect, useState } from 'react';
-// Import the SDK conditionally only on the client side
 import Head from 'next/head';
-import axios from 'axios';
-import Image from 'next/image';
-
-type User = {
-  fid: number;
-  username: string;
-  displayName: string;
-  pfp: string;
-};
-
-type WalletData = {
-  eth: string[];
-  sol: string[];
-  custody_address: string;
-};
-
-type Position = {
-  id: string;
-  appName: string;
-  label: string;
-  value: number;
-  isInRange: boolean;
-  tokens: { symbol: string; }[];
-};
-
-// Enable developer mode for testing
-const DEV_MODE = process.env.NODE_ENV === 'development';
 
 export default function Home() {
-  const [isInFrame, setIsInFrame] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [wallets, setWallets] = useState<WalletData | null>(null);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState('Loading...');
   const [frameSdk, setFrameSdk] = useState<any>(null);
-  const [devModeEnabled, setDevModeEnabled] = useState(false);
-  const [frameDetectionStatus, setFrameDetectionStatus] = useState<string>('Checking frame environment...');
-  const [frameError, setFrameError] = useState<string | null>(null);
-  const [isContentReady, setIsContentReady] = useState(false);
 
-  // Dynamically load the Farcaster Frame SDK on the client side only
+  // Extremely minimal implementation
   useEffect(() => {
-    const loadSDK = async () => {
+    async function init() {
       try {
-        setFrameDetectionStatus('Loading Farcaster SDK...');
+        // Display something immediately
+        setStatus('Initializing...');
+        
+        // Load SDK
         const { sdk } = await import('@farcaster/frame-sdk');
         setFrameSdk(sdk);
+        setStatus('SDK loaded');
         
-        setFrameDetectionStatus('Checking frame environment...');
-        const inFrame = await sdk.isInMiniApp();
-        
-        if (inFrame) {
-          setFrameDetectionStatus('Frame detected! Loading app...');
-          setIsInFrame(true);
-          
-          // Call ready() immediately after detecting we're in a frame
-          // This is critical - the splash screen must be shown until explicitly dismissed
-          try {
-            console.log('Calling ready() to keep splash screen visible');
-            // DO NOT dismiss the splash screen yet - just let the SDK know we're in a frame
-            await sdk.actions.ready({ disableNativeGestures: true });
-          } catch (readyError) {
-            console.error('Failed to call initial ready():', readyError);
-            setFrameError('Failed to initialize splash screen');
-          }
-        } else {
-          setFrameDetectionStatus('Not running in Farcaster Frame');
-          setIsInFrame(false);
-        }
-      } catch (err) {
-        console.error('SDK initialization error:', err);
-        setFrameError('Failed to initialize Farcaster SDK');
-        setIsInFrame(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadSDK();
-  }, []);
-
-  // Set content ready after authentication and data loading
-  useEffect(() => {
-    if (isAuthenticated && !isLoading && !isAuthenticating) {
-      console.log('Content is ready - authentication complete');
-      setIsContentReady(true);
-    }
-  }, [isAuthenticated, isLoading, isAuthenticating]);
-
-  // We KEEP the splash screen visible until content is fully ready
-  // This is the MOST important part to prevent a blank screen
-  useEffect(() => {
-    console.log(`Content ready state: ${isContentReady}, In frame: ${isInFrame}, SDK loaded: ${!!frameSdk}`);
-    
-    if (!isContentReady || !isInFrame || !frameSdk) {
-      // Don't dismiss the splash screen until everything is ready
-      return;
-    }
-    
-    const dismissSplashScreen = async () => {
-      try {
-        console.log('Dismissing splash screen - content is fully ready');
-        await frameSdk.actions.ready({ disableNativeGestures: true });
-        setFrameDetectionStatus('App loaded successfully!');
-      } catch (readyError) {
-        console.error('Failed to dismiss splash screen:', readyError);
-        setFrameError('Failed to dismiss splash screen');
-      }
-    };
-
-    dismissSplashScreen();
-  }, [isContentReady, isInFrame, frameSdk]);
-
-  // Enable developer mode
-  const enableDevMode = () => {
-    setDevModeEnabled(true);
-    setIsInFrame(true);
-  };
-
-  // Handle Sign in with Farcaster
-  const handleSignIn = async () => {
-    if (!frameSdk && !devModeEnabled) {
-      setError('Frame SDK not loaded. Please try again.');
-      return;
-    }
-    
-    if (!isInFrame && !devModeEnabled) {
-      setError('This app must be opened in a Farcaster Frame or client to authenticate.');
-      return;
-    }
-    
-    setIsAuthenticating(true);
-    setError(null);
-    
-    try {
-      // Get nonce from server
-      const { data: nonceData } = await axios.post('/api/auth/nonce');
-      const { nonce, sessionId } = nonceData;
-      
-      if (devModeEnabled) {
-        // In dev mode, mock the authentication
-        const mockUser = {
-          fid: 12345,
-          username: 'devuser',
-          displayName: 'Development User',
-          pfp: 'https://picsum.photos/200'
-        };
-        
-        const mockToken = 'dev-token-12345';
-        
-        setUser(mockUser);
-        setToken(mockToken);
-        setIsAuthenticated(true);
-        
-        const mockWallets = {
-          eth: ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F', '0xdAC17F958D2ee523a2206206994597C13D831ec7'],
-          sol: [],
-          custody_address: '0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199'
-        };
-        
-        setWallets(mockWallets);
-        
-        const mockPositions = [
-          {
-            id: 'uniswap-v3-eth-usdc',
-            appName: 'Uniswap V3',
-            label: 'ETH-USDC',
-            value: 1250.75,
-            isInRange: true,
-            tokens: [{ symbol: 'ETH' }, { symbol: 'USDC' }]
-          },
-          {
-            id: 'aerodrome-weth-usdc',
-            appName: 'Aerodrome',
-            label: 'WETH-USDC',
-            value: 890.25,
-            isInRange: false,
-            tokens: [{ symbol: 'WETH' }, { symbol: 'USDC' }]
-          }
-        ];
-        
-        setPositions(mockPositions);
-        setIsContentReady(true);
-      } else {
-        // Normal Farcaster authentication
+        // Call ready immediately to dismiss splash screen
         try {
-          const signInResult = await frameSdk.actions.signIn({ nonce });
-          
-          // Verify signature with our backend
-          const { data: authData } = await axios.post('/api/auth/verify', {
-            message: signInResult.message,
-            signature: signInResult.signature,
-            sessionId
-          });
-          
-          // Save auth token and user data
-          setToken(authData.token);
-          setUser(authData.user);
-          setIsAuthenticated(true);
-          
-          // Fetch user's wallets
-          await fetchWallets(authData.token);
-        } catch (signInErr) {
-          console.error('Error during SIWF flow:', signInErr);
-          setError('Error during Farcaster authentication. Make sure you are using a Farcaster-compatible client.');
+          await sdk.actions.ready({ disableNativeGestures: true });
+          setStatus('App ready');
+        } catch (e) {
+          setStatus('Ready call failed: ' + (e instanceof Error ? e.message : String(e)));
         }
+      } catch (e) {
+        setStatus('Error: ' + (e instanceof Error ? e.message : String(e)));
       }
-    } catch (err) {
-      console.error('Authentication error:', err);
-      setError('Failed to authenticate. Please try again.');
-    } finally {
-      setIsAuthenticating(false);
     }
-  };
-
-  // Fetch user's wallets
-  const fetchWallets = async (authToken: string) => {
-    try {
-      const { data } = await axios.get('/api/user/wallets', {
-        headers: {
-          Authorization: `Bearer ${authToken}`
-        }
-      });
-      
-      setWallets(data);
-      
-      // If we have wallets, fetch positions
-      if (data.eth.length > 0) {
-        await fetchPositions(authToken, data.eth);
-      }
-      setIsContentReady(true);
-    } catch (err) {
-      console.error('Error fetching wallets:', err);
-      setError('Failed to fetch wallet data.');
-    }
-  };
-
-  // Fetch DeFi positions
-  const fetchPositions = async (authToken: string, addresses: string[]) => {
-    try {
-      const queryParams = new URLSearchParams();
-      addresses.forEach(address => queryParams.append('addresses', address));
-      
-      const { data } = await axios.get(`/api/positions?${queryParams.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`
-        }
-      });
-      
-      setPositions(data.positions || []);
-    } catch (err) {
-      console.error('Error fetching positions:', err);
-      setError('Failed to fetch position data.');
-    }
-  };
-
-  // Render content based on state
-  const renderContent = () => {
-    if (isLoading) {
-      return (
-        <div className="text-center p-4">
-          <div className="mb-4">{frameDetectionStatus}</div>
-          {frameError && <div className="text-red-500 mb-4">{frameError}</div>}
-          <div className="animate-pulse">Loading...</div>
-        </div>
-      );
-    }
-
-    if (!isInFrame && !devModeEnabled) {
-      return (
-        <div className="text-center p-4">
-          <h2 className="text-xl font-bold mb-2">Farcaster Frame Required</h2>
-          <p className="mb-4">This app needs to run inside a Farcaster client.</p>
-          <p className="text-sm text-gray-500 mb-4">Status: {frameDetectionStatus}</p>
-          {frameError && <p className="text-red-500 mb-4">{frameError}</p>}
-          
-          {DEV_MODE && (
-            <div className="mt-4">
-              <button
-                onClick={enableDevMode}
-                className="btn btn-secondary"
-              >
-                Enable Developer Testing Mode
-              </button>
-              <p className="mt-2 text-xs text-gray-500">This will simulate the Farcaster environment for testing purposes.</p>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (!isAuthenticated) {
-      return (
-        <div className="text-center p-4">
-          <h2 className="text-xl font-bold mb-2">Sign in with Farcaster</h2>
-          <p className="mb-4">Connect your Farcaster account to track your DeFi positions.</p>
-          <button
-            className="btn btn-primary"
-            onClick={handleSignIn}
-            disabled={isAuthenticating}
-          >
-            {isAuthenticating ? 'Connecting...' : 'Sign in with Farcaster'}
-          </button>
-          {devModeEnabled && (
-            <p className="mt-2 text-xs text-gray-500">Using developer testing mode.</p>
-          )}
-          {error && <p className="mt-2 text-red-500">{error}</p>}
-        </div>
-      );
-    }
-
-    return (
-      <div className="p-4">
-        <div className="flex items-center mb-4">
-          {user?.pfp && (
-            <div className="mr-2 relative w-12 h-12 rounded-full overflow-hidden">
-              <Image 
-                src={user.pfp}
-                alt={user.displayName || user.username}
-                fill
-                style={{ objectFit: "cover" }}
-              />
-            </div>
-          )}
-          <div>
-            <h2 className="text-xl font-bold">{user?.displayName || user?.username}</h2>
-            <p className="text-gray-600">@{user?.username}</p>
-          </div>
-        </div>
-
-        {wallets && (
-          <div className="mb-4">
-            <h3 className="text-lg font-bold mb-2">Connected Wallets</h3>
-            <div className="space-y-1 text-sm">
-              {wallets.eth.map((address) => (
-                <div key={address} className="address">{address}</div>
-              ))}
-              <div className="address">{wallets.custody_address} (Custody)</div>
-            </div>
-          </div>
-        )}
-
-        <div>
-          <h3 className="text-lg font-bold mb-2">DeFi Positions on Base</h3>
-          {positions.length === 0 ? (
-            <p>No positions found.</p>
-          ) : (
-            <div className="space-y-2">
-              {positions.map((position) => (
-                <div key={position.id} className={`position-card ${position.isInRange ? 'position-card-in-range' : 'position-card-out-range'}`}>
-                  <div className="position-card-header">
-                    <span className="position-card-title">{position.label}</span>
-                    <span className="position-card-value">${position.value.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>{position.appName}</div>
-                    <div className={`badge ${position.isInRange ? 'badge-success' : 'badge-error'}`}>
-                      {position.isInRange ? 'In Range' : 'Out of Range'}
-                    </div>
-                  </div>
-                  <div className="position-card-tokens mt-2">
-                    {position.tokens.map((token, i) => (
-                      <span key={i} className="token-tag">{token.symbol}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+    
+    init();
+  }, []);
 
   return (
     <>
       <Head>
         <title>DeFi Position Tracker | Farcaster Mini App</title>
-        <meta name="description" content="Track your DeFi positions on Base chain and get alerts when your LPs go out of range" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="description" content="Track your DeFi positions on Base chain" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         <meta name="fc:frame" content={JSON.stringify({
           version: "next",
           imageUrl: "https://defi-tracker.vercel.app/og-image.png",
@@ -399,10 +52,25 @@ export default function Home() {
             }
           }
         })} />
-        <link rel="icon" href="/favicon.ico" />
       </Head>
-      <main className="container mx-auto max-w-2xl min-h-screen">
-        {renderContent()}
+      
+      <main className="container mx-auto p-4 max-w-2xl min-h-screen bg-white text-black">
+        <div className="text-center p-8 border-2 border-black rounded-lg my-20 bg-yellow-100">
+          <h1 className="text-2xl font-bold mb-4">DeFi Position Tracker</h1>
+          <div className="text-xl mb-4">Status: {status}</div>
+          
+          <div className="grid grid-cols-1 gap-4 mt-8">
+            <div className="p-4 border border-gray-300 rounded-lg bg-white">
+              <p className="text-lg font-bold">This is a test card</p>
+              <p>If you can see this, the app is rendering correctly.</p>
+            </div>
+            
+            <div className="p-4 border border-gray-300 rounded-lg bg-white">
+              <p className="text-lg font-bold">Frame SDK Status</p>
+              <p>{frameSdk ? 'SDK Loaded' : 'SDK Not Loaded'}</p>
+            </div>
+          </div>
+        </div>
       </main>
     </>
   );
