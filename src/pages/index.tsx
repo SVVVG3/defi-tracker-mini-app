@@ -59,6 +59,17 @@ export default function Home() {
         if (inFrame) {
           setFrameDetectionStatus('Frame detected! Loading app...');
           setIsInFrame(true);
+          
+          // Call ready() immediately after detecting we're in a frame
+          // This is critical - the splash screen must be shown until explicitly dismissed
+          try {
+            console.log('Calling ready() to keep splash screen visible');
+            // DO NOT dismiss the splash screen yet - just let the SDK know we're in a frame
+            await sdk.actions.ready({ disableNativeGestures: true });
+          } catch (readyError) {
+            console.error('Failed to call initial ready():', readyError);
+            setFrameError('Failed to initialize splash screen');
+          }
         } else {
           setFrameDetectionStatus('Not running in Farcaster Frame');
           setIsInFrame(false);
@@ -75,29 +86,37 @@ export default function Home() {
     loadSDK();
   }, []);
 
-  // Call ready() only when content is actually ready to be displayed
-  useEffect(() => {
-    const callReady = async () => {
-      if (isInFrame && frameSdk && isContentReady && !isLoading) {
-        try {
-          await frameSdk.actions.ready({ disableNativeGestures: true });
-          setFrameDetectionStatus('App loaded successfully!');
-        } catch (readyError) {
-          console.error('Failed to call ready():', readyError);
-          setFrameError('Failed to dismiss splash screen');
-        }
-      }
-    };
-
-    callReady();
-  }, [isInFrame, frameSdk, isContentReady, isLoading]);
-
   // Set content ready after authentication and data loading
   useEffect(() => {
     if (isAuthenticated && !isLoading && !isAuthenticating) {
+      console.log('Content is ready - authentication complete');
       setIsContentReady(true);
     }
   }, [isAuthenticated, isLoading, isAuthenticating]);
+
+  // We KEEP the splash screen visible until content is fully ready
+  // This is the MOST important part to prevent a blank screen
+  useEffect(() => {
+    console.log(`Content ready state: ${isContentReady}, In frame: ${isInFrame}, SDK loaded: ${!!frameSdk}`);
+    
+    if (!isContentReady || !isInFrame || !frameSdk) {
+      // Don't dismiss the splash screen until everything is ready
+      return;
+    }
+    
+    const dismissSplashScreen = async () => {
+      try {
+        console.log('Dismissing splash screen - content is fully ready');
+        await frameSdk.actions.ready({ disableNativeGestures: true });
+        setFrameDetectionStatus('App loaded successfully!');
+      } catch (readyError) {
+        console.error('Failed to dismiss splash screen:', readyError);
+        setFrameError('Failed to dismiss splash screen');
+      }
+    };
+
+    dismissSplashScreen();
+  }, [isContentReady, isInFrame, frameSdk]);
 
   // Enable developer mode
   const enableDevMode = () => {
