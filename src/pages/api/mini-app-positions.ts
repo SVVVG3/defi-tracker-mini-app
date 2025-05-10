@@ -11,11 +11,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Debug info - log environment
+  // Debug info - log environment details for API key verification
   console.log('API Environment:', {
     nodeEnv: process.env.NODE_ENV,
-    zapperKeyPresent: !!ZAPPER_API_KEY,
+    zapperKeyExists: !!ZAPPER_API_KEY,
     zapperKeyLength: ZAPPER_API_KEY ? ZAPPER_API_KEY.length : 0,
+    // Add partial key info for debugging (first 4 chars)
+    zapperKeyPrefix: ZAPPER_API_KEY ? ZAPPER_API_KEY.substring(0, 4) : 'none',
   });
 
   // Handle preflight requests
@@ -43,123 +45,162 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Log the request for debugging
     console.log('Mini app positions request:', { 
       addresses: addressList,
-      hasZapperKey: !!ZAPPER_API_KEY 
+      hasZapperKey: !!ZAPPER_API_KEY,
+      zapperKeyLength: ZAPPER_API_KEY ? ZAPPER_API_KEY.length : 0
     });
     
+    // If we don't have a valid Zapper API key, return mock data immediately
+    if (!ZAPPER_API_KEY || ZAPPER_API_KEY.length < 10) {
+      console.warn('Invalid or missing Zapper API key, returning mock data');
+      return returnMockData(res);
+    }
+    
     // If we have a Zapper API key, use it to fetch real data
-    if (ZAPPER_API_KEY) {
-      try {
-        console.log('Using Zapper API to fetch real data');
-        // Fetch positions from Zapper API for each address
-        const positionsData = await Promise.all(
-          addressList.map(async (address) => {
-            try {
-              // Log request to Zapper
-              console.log(`Fetching data from Zapper for address: ${address}`);
-              
-              // Fetch from Zapper API
-              const response = await axios.get(
-                `https://api.zapper.xyz/v2/balances/apps`,
-                {
-                  params: {
-                    'addresses[]': address,
-                    'networks[]': 'base', // Focus on Base network
-                    'api_key': ZAPPER_API_KEY,
-                  },
-                  headers: {
-                    accept: 'application/json',
-                  },
-                }
-              );
-              
-              console.log(`Got Zapper response for ${address}: status=${response.status}`);
-              return { address, data: response.data };
-            } catch (error) {
-              console.error(`Error fetching data for address ${address}:`, error);
-              // More detailed error logging for troubleshooting
-              if (axios.isAxiosError(error)) {
-                console.error('Axios error details:', {
-                  status: error.response?.status,
-                  statusText: error.response?.statusText,
-                  data: error.response?.data,
-                });
-              }
-              return { address, error: true };
-            }
-          })
-        );
-        
-        // Log processing status
-        console.log(`Processing position data for ${positionsData.length} addresses`);
-        
-        // Process the data to extract positions
-        let allPositions = [];
-        let totalValue = 0;
-        let outOfRangeCount = 0;
-        
-        for (const result of positionsData) {
-          if (result.error) continue;
-          
-          // Extract positions from Zapper data
-          const appBalances = result.data?.balances || {};
-          
-          console.log(`Found ${Object.keys(appBalances).length} apps for address ${result.address}`);
-          
-          // Loop through all apps
-          for (const appId in appBalances) {
-            const app = appBalances[appId];
+    try {
+      console.log('Using Zapper API to fetch real data');
+      // Fetch positions from Zapper API for each address
+      const positionsData = await Promise.all(
+        addressList.map(async (address) => {
+          try {
+            // Log request to Zapper
+            console.log(`Fetching data from Zapper for address: ${address}`);
             
-            // Extract products within each app
-            for (const product of app.products || []) {
-              // Focus only on liquidity pool assets
-              if (product.label === 'Liquidity Pool' || product.label === 'Liquidity Positions') {
-                for (const asset of product.assets || []) {
-                  // Create a position object for each asset
-                  const position = {
-                    id: `${appId}-${asset.key || asset.address}`,
-                    appName: app.appName || appId,
-                    label: asset.label || 'Unnamed Position',
-                    value: asset.balanceUSD || 0,
-                    isInRange: asset.isInRange !== false, // Consider in range by default unless specifically marked
-                    tokens: (asset.tokens || []).map((token: { symbol: string; address: string }) => ({
-                      symbol: token.symbol,
-                      address: token.address
-                    })),
-                    address: asset.address || '',
-                    lowerPrice: asset.lowerPrice,
-                    upperPrice: asset.upperPrice,
-                    currentPrice: asset.currentPrice
-                  };
-                  
-                  allPositions.push(position);
-                  totalValue += position.value;
-                  if (!position.isInRange) outOfRangeCount++;
-                }
+            // Verify address format - should be a valid Ethereum address
+            if (!address || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
+              console.warn(`Invalid Ethereum address format: ${address}`);
+              return { address, error: true, errorReason: 'Invalid address format' };
+            }
+            
+            // Fetch from Zapper API
+            const response = await axios.get(
+              `https://api.zapper.xyz/v2/balances/apps`,
+              {
+                params: {
+                  'addresses[]': address,
+                  'networks[]': 'base', // Focus on Base network
+                  'api_key': ZAPPER_API_KEY,
+                },
+                headers: {
+                  accept: 'application/json',
+                },
+                timeout: 10000 // 10 second timeout
+              }
+            );
+            
+            console.log(`Got Zapper response for ${address}: status=${response.status}`);
+            return { address, data: response.data };
+          } catch (error) {
+            console.error(`Error fetching data for address ${address}:`, error);
+            // More detailed error logging for troubleshooting
+            if (axios.isAxiosError(error)) {
+              console.error('Axios error details:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+              });
+              
+              // Check for rate limiting
+              if (error.response?.status === 429) {
+                console.error('Zapper API rate limited, returning mock data');
+                return { address, error: true, errorReason: 'Rate limited' };
+              }
+              
+              // Check for API key errors
+              if (error.response?.status === 401 || error.response?.status === 403) {
+                console.error('Zapper API key invalid or unauthorized');
+                return { address, error: true, errorReason: 'API key error' };
+              }
+            }
+            return { address, error: true, errorReason: 'Unknown error' };
+          }
+        })
+      );
+      
+      // Check if all requests failed with API key errors
+      const allApiKeyErrors = positionsData.every(result => 
+        result.error && (result.errorReason === 'API key error' || result.errorReason === 'Rate limited')
+      );
+      
+      if (allApiKeyErrors) {
+        console.error('All requests failed with API key issues, returning mock data');
+        return returnMockData(res);
+      }
+      
+      // Log processing status
+      console.log(`Processing position data for ${positionsData.length} addresses`);
+      
+      // Process the data to extract positions
+      let allPositions = [];
+      let totalValue = 0;
+      let outOfRangeCount = 0;
+      let successfulAddresses = 0;
+      
+      for (const result of positionsData) {
+        if (result.error) continue;
+        
+        successfulAddresses++;
+        
+        // Extract positions from Zapper data
+        const appBalances = result.data?.balances || {};
+        
+        console.log(`Found ${Object.keys(appBalances).length} apps for address ${result.address}`);
+        
+        // Loop through all apps
+        for (const appId in appBalances) {
+          const app = appBalances[appId];
+          
+          // Extract products within each app
+          for (const product of app.products || []) {
+            // Focus only on liquidity pool assets
+            if (product.label === 'Liquidity Pool' || product.label === 'Liquidity Positions') {
+              for (const asset of product.assets || []) {
+                // Create a position object for each asset
+                const position = {
+                  id: `${appId}-${asset.key || asset.address}`,
+                  appName: app.appName || appId,
+                  label: asset.label || 'Unnamed Position',
+                  value: asset.balanceUSD || 0,
+                  isInRange: asset.isInRange !== false, // Consider in range by default unless specifically marked
+                  tokens: (asset.tokens || []).map((token: { symbol: string; address: string }) => ({
+                    symbol: token.symbol,
+                    address: token.address
+                  })),
+                  address: asset.address || '',
+                  lowerPrice: asset.lowerPrice,
+                  upperPrice: asset.upperPrice,
+                  currentPrice: asset.currentPrice
+                };
+                
+                allPositions.push(position);
+                totalValue += position.value;
+                if (!position.isInRange) outOfRangeCount++;
               }
             }
           }
         }
-        
-        console.log(`Returning ${allPositions.length} real positions from Zapper`);
-        
-        // Return the processed position data
-        return res.status(200).json({
-          positions: allPositions,
-          summary: {
-            totalPositions: allPositions.length,
-            totalValue: totalValue,
-            outOfRangeCount: outOfRangeCount
-          }
-        });
-      } catch (error) {
-        console.error('Error processing Zapper data:', error);
-        // Fall back to mock data on error
-        console.log('Falling back to mock data due to error');
+      }
+      
+      // If we didn't get any positions, return mock data
+      if (allPositions.length === 0) {
+        console.log(`No real positions found (${successfulAddresses} successful addresses), returning mock data`);
         return returnMockData(res);
       }
-    } else {
-      // If no Zapper API key, return mock data
-      console.log('No Zapper API key found, returning mock data');
+      
+      console.log(`Returning ${allPositions.length} real positions from Zapper`);
+      
+      // Return the processed position data
+      return res.status(200).json({
+        positions: allPositions,
+        summary: {
+          totalPositions: allPositions.length,
+          totalValue: totalValue,
+          outOfRangeCount: outOfRangeCount
+        }
+      });
+    } catch (error) {
+      console.error('Error processing Zapper data:', error);
+      // Fall back to mock data on error
+      console.log('Falling back to mock data due to error');
       return returnMockData(res);
     }
   } catch (error) {
