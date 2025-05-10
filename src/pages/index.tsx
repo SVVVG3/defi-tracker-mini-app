@@ -41,35 +41,31 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [frameSdk, setFrameSdk] = useState<any>(null);
   const [devModeEnabled, setDevModeEnabled] = useState(false);
+  const [frameDetectionStatus, setFrameDetectionStatus] = useState<string>('Checking frame environment...');
+  const [frameError, setFrameError] = useState<string | null>(null);
 
   // Dynamically load the Farcaster Frame SDK on the client side only
   useEffect(() => {
     const loadSDK = async () => {
       try {
-        // Dynamic import only on client side
+        setFrameDetectionStatus('Loading Farcaster SDK...');
         const { sdk } = await import('@farcaster/frame-sdk');
         setFrameSdk(sdk);
         
-        // Check if we're in a frame or development mode
+        setFrameDetectionStatus('Checking frame environment...');
         const inFrame = await sdk.isInMiniApp();
-        console.log('Frame SDK loaded, in frame:', inFrame);
-        console.log('SDK context:', sdk.context);
         
-        // Additional check for frame context
-        const frameContext = await sdk.context;
-        console.log('Frame context:', frameContext);
-        
-        if (inFrame || frameContext) {
-          console.log('Setting isInFrame to true');
+        if (inFrame) {
+          setFrameDetectionStatus('Frame detected! Loading app...');
           setIsInFrame(true);
         } else {
-          console.log('Not running in a Farcaster Frame');
+          setFrameDetectionStatus('Not running in Farcaster Frame');
           setIsInFrame(false);
         }
         
         setIsLoading(false);
       } catch (err) {
-        console.error('Error loading Frame SDK:', err);
+        setFrameError('Failed to initialize Farcaster SDK');
         setIsInFrame(false);
         setIsLoading(false);
       }
@@ -83,18 +79,12 @@ export default function Home() {
     const callReady = async () => {
       if (isInFrame && frameSdk && !isLoading) {
         try {
-          console.log('Attempting to call ready()...');
+          setFrameDetectionStatus('App ready, dismissing splash screen...');
           await frameSdk.actions.ready();
-          console.log('Successfully called ready() after content loaded');
+          setFrameDetectionStatus('App loaded successfully!');
         } catch (readyError) {
-          console.error('Error calling ready():', readyError);
+          setFrameError('Failed to dismiss splash screen');
         }
-      } else {
-        console.log('Not calling ready() because:', {
-          isInFrame,
-          hasFrameSdk: !!frameSdk,
-          isLoading
-        });
       }
     };
 
@@ -284,7 +274,13 @@ export default function Home() {
   // Render content based on state
   const renderContent = () => {
     if (isLoading) {
-      return <div className="text-center p-4">Loading...</div>;
+      return (
+        <div className="text-center p-4">
+          <div className="mb-4">{frameDetectionStatus}</div>
+          {frameError && <div className="text-red-500 mb-4">{frameError}</div>}
+          <div className="animate-pulse">Loading...</div>
+        </div>
+      );
     }
 
     if (!isInFrame && !devModeEnabled) {
@@ -292,7 +288,8 @@ export default function Home() {
         <div className="text-center p-4">
           <h2 className="text-xl font-bold mb-2">Farcaster Frame Required</h2>
           <p className="mb-4">This app needs to run inside a Farcaster client.</p>
-          <p className="text-sm text-gray-500">If you're testing in development, note that this app can only authenticate when opened from within a Farcaster Frame or client that supports Frames.</p>
+          <p className="text-sm text-gray-500 mb-4">Status: {frameDetectionStatus}</p>
+          {frameError && <p className="text-red-500 mb-4">{frameError}</p>}
           
           {DEV_MODE && (
             <div className="mt-4">
@@ -305,11 +302,6 @@ export default function Home() {
               <p className="mt-2 text-xs text-gray-500">This will simulate the Farcaster environment for testing purposes.</p>
             </div>
           )}
-          
-          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-300 rounded text-sm">
-            <p className="font-bold">Development Testing:</p>
-            <p>For testing purposes, you can create a mock Farcaster environment or use a Farcaster client that supports Frame testing.</p>
-          </div>
         </div>
       );
     }
