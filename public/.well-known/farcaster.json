@@ -1,4 +1,9 @@
 {
+  "accountAssociation": {
+    "header": "eyJmaWQiOjQ2NjExMSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDQ0ZDRjNThlZmNCYjQ0NjM5RDY0NDIwMTc1Q2Y1MTlhQTMxOTFhODYifQ",
+    "payload": "eyJkb21haW4iOiJkZWZpLXRyYWNrZXIudmVyY2VsLmFwcCJ9",
+    "signature": "MHgxYzA4ZDc2ZDFhZjM1MTBjZjRiZjc1NWNiZTBmMWM2Mzc2ZjlhZTQyNGVjMWE0OTc0NTIyZmE5ZDIzZGVlN2NkMmQ5ODI1MTY4OTgzZTI2ZmNiM2Q0MjgyNDkyZjI1MmE3OWY2MjU4MjUyZmM3YTAyODliNDUyNzAyMGMyZDViYzFi"
+  },
   "frame": {
     "version": "next",
     "name": "DeFi Position Tracker",
