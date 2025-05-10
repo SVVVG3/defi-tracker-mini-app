@@ -92,6 +92,13 @@ export default function Home() {
     callReady();
   }, [isInFrame, frameSdk, isContentReady, isLoading]);
 
+  // Set content ready after authentication and data loading
+  useEffect(() => {
+    if (isAuthenticated && !isLoading && !isAuthenticating) {
+      setIsContentReady(true);
+    }
+  }, [isAuthenticated, isLoading, isAuthenticating]);
+
   // Enable developer mode
   const enableDevMode = () => {
     setDevModeEnabled(true);
