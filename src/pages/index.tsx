@@ -246,14 +246,14 @@ export default function Home() {
   // Generate the frame metadata
   const frameMetadata = {
     version: "next", 
-    imageUrl: "https://defi-tracker-mini-app.vercel.app/og-image.png",
+    imageUrl: "https://defi-tracker.vercel.app/og-image.png",
     button: {
       title: "Track DeFi Positions",
       action: {
         type: "launch_frame",
         name: "DeFi Position Tracker",
-        url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker-mini-app.vercel.app",
-        splashImageUrl: "https://defi-tracker-mini-app.vercel.app/logo.png",
+        url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker.vercel.app",
+        splashImageUrl: "https://defi-tracker.vercel.app/logo.png",
         splashBackgroundColor: "#4F46E5"
       }
     }

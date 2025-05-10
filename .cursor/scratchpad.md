@@ -138,6 +138,11 @@ The DeFi Position Tracker application is now feature-complete with all major com
 3. **Real-Time Monitoring**: WebSocket-based system for instant position status updates
 4. **UI Design System**: Consistent visual design throughout the application
 
+### Deployment Information
+- **Production URL**: https://defi-tracker.vercel.app
+- All app URLs and references have been updated to use this domain
+- The WebSocket server will be deployed separately as Vercel doesn't support long-running WebSocket connections
+
 ### Real-Time Monitoring Implementation
 
 After discovering that Vercel's cron jobs are unsuitable for real-time position monitoring (minimum interval is hourly), we've successfully implemented a WebSocket-based real-time monitoring system:

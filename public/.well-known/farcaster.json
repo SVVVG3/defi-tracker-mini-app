@@ -2,11 +2,11 @@
   "frame": {
     "version": "1",
     "name": "DeFi Position Tracker",
-    "iconUrl": "https://defi-tracker-mini-app.vercel.app/logo.png",
-    "homeUrl": "https://defi-tracker-mini-app.vercel.app",
-    "imageUrl": "https://defi-tracker-mini-app.vercel.app/og-image.png",
+    "iconUrl": "https://defi-tracker.vercel.app/logo.png",
+    "homeUrl": "https://defi-tracker.vercel.app",
+    "imageUrl": "https://defi-tracker.vercel.app/og-image.png",
     "buttonTitle": "Track DeFi Positions",
-    "splashImageUrl": "https://defi-tracker-mini-app.vercel.app/logo.png",
+    "splashImageUrl": "https://defi-tracker.vercel.app/logo.png",
     "splashBackgroundColor": "#4F46E5"
   }
 } 
