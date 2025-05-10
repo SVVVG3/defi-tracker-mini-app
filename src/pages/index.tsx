@@ -63,6 +63,13 @@ export default function Home() {
   // Initialize frame metadata immediately
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // Remove any existing fc:frame meta tag
+      const existingMeta = document.querySelector('meta[name="fc:frame"]');
+      if (existingMeta) {
+        existingMeta.remove();
+      }
+      
+      // Add the new meta tag
       const meta = document.createElement('meta');
       meta.setAttribute('name', 'fc:frame');
       meta.setAttribute('content', JSON.stringify(frameMetadata));
@@ -84,6 +91,7 @@ export default function Home() {
         if (inFrame) {
           setFrameDetectionStatus('Frame detected! Loading app...');
           setIsInFrame(true);
+          
           // Call ready() immediately when we detect we're in a frame
           try {
             await sdk.actions.ready();
