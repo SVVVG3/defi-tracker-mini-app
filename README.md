@@ -168,6 +168,81 @@ To monitor positions automatically, set up cron jobs:
 - `POST /api/test/monitor` - Test position monitoring with authentication
 - `GET /api/test/monitor-standalone` - Test position monitoring without authentication
 
+## Real-Time Position Monitoring
+
+The DeFi Tracker app now includes a real-time WebSocket-based monitoring system that provides immediate notifications when positions go out of range.
+
+### Architecture
+
+The monitoring system consists of:
+
+1. **WebSocket Server**: A standalone Node.js server that connects to DeFi protocol data sources and monitors position status in real-time.
+2. **Protocol Listeners**: Dedicated components that subscribe to price updates from various DeFi protocols (Uniswap V3, Aerodrome, etc.).
+3. **Position Checker**: Evaluates positions against real-time price data to detect when positions go in or out of range.
+4. **Notification Manager**: Handles sending notifications to users when position status changes.
+5. **Client Integration**: The main app connects to the WebSocket server to display real-time updates.
+
+### Running the WebSocket Server
+
+#### Standalone Mode
+
+```bash
+# Start the WebSocket server in standalone mode
+npm run websocket-server
+```
+
+This will start the server on port 3002 by default. You can configure the port by setting the `WS_PORT` environment variable.
+
+#### Docker Mode
+
+```bash
+# Build and start both the app and WebSocket server
+docker-compose up -d
+
+# Start only the WebSocket server
+docker-compose up -d websocket
+
+# View logs
+docker-compose logs -f websocket
+```
+
+### Environment Variables
+
+The WebSocket server requires the following environment variables:
+
+- `JWT_SECRET`: Secret key for JWT token verification (must match the main app)
+- `MONITOR_API_KEY`: API key for secure notification sending
+- `WS_PORT`: Port for the WebSocket server (default: 3002)
+- `NEXT_PUBLIC_BASE_URL`: URL of the main app for CORS configuration
+
+### Client Usage
+
+The main app includes a `PositionMonitor` component that automatically connects to the WebSocket server when a user is authenticated:
+
+```jsx
+import { PositionMonitor } from '@/components/PositionMonitor';
+
+// In your positions page:
+<PositionMonitor positions={userPositions} />
+```
+
+### Hosting Recommendations
+
+For production environments, we recommend:
+
+1. **DigitalOcean Droplet**: $5-10/month for the WebSocket server
+2. **AWS EC2**: $10-15/month for more scalable options
+3. **MongoDB Atlas**: Free tier for position tracking
+
+### Troubleshooting
+
+If you encounter connection issues:
+
+1. Ensure the WebSocket server is running
+2. Check that your environment variables are set correctly
+3. Verify the client is connecting to the correct WebSocket URL
+4. Check CORS settings if you see connection errors
+
 ## License
 
 [MIT License](LICENSE)# defi-tracker-mini-app

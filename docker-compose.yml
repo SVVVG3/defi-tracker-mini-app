@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Main Next.js app
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_WS_URL=http://websocket:3002
+    depends_on:
+      - websocket
+    env_file:
+      - .env.production
+    networks:
+      - defi-tracker-network
+
+  # WebSocket server for real-time monitoring
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile.websocket
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - WS_PORT=3002
+      # Add other environment variables needed for the WebSocket server
+      - JWT_SECRET=${JWT_SECRET}
+      - MONITOR_API_KEY=${MONITOR_API_KEY}
+      - NEXT_PUBLIC_BASE_URL=http://app:3000
+    env_file:
+      - .env.production
+    networks:
+      - defi-tracker-network
+    volumes:
+      - websocket-data:/app/data
+
+networks:
+  defi-tracker-network:
+    driver: bridge
+
+volumes:
+  websocket-data:
+    driver: local 
