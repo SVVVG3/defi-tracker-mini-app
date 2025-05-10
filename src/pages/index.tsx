@@ -374,7 +374,7 @@ export default function Home() {
             action: {
               type: "launch_frame",
               name: "DeFi Position Tracker",
-              url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker.vercel.app",
+              url: "https://defi-tracker.vercel.app",
               splashImageUrl: "https://defi-tracker.vercel.app/logo.png",
               splashBackgroundColor: "#000000"
             }

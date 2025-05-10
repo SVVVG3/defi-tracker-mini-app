@@ -7,6 +7,10 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
+        hostname: 'defi-tracker.vercel.app',
+      },
+      {
+        protocol: 'https',
         hostname: 'i.imgur.com',
       },
       {
