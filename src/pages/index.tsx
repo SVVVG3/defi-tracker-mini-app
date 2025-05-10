@@ -2,34 +2,30 @@ import { useEffect, useState } from 'react';
 import Head from 'next/head';
 
 export default function Home() {
-  const [status, setStatus] = useState('Loading...');
-  const [frameSdk, setFrameSdk] = useState<any>(null);
-
-  // Extremely minimal implementation
+  const [sdkStatus, setSdkStatus] = useState('Not yet loaded');
+  
+  // Initialize SDK after content is visible
   useEffect(() => {
-    async function init() {
+    // Add a delay to ensure content renders first
+    const timer = setTimeout(async () => {
       try {
-        // Display something immediately
-        setStatus('Initializing...');
-        
-        // Load SDK
+        // Load SDK only after content is visible
         const { sdk } = await import('@farcaster/frame-sdk');
-        setFrameSdk(sdk);
-        setStatus('SDK loaded');
+        setSdkStatus('SDK loaded, calling ready()');
         
-        // Call ready immediately to dismiss splash screen
+        // Call ready
         try {
           await sdk.actions.ready({ disableNativeGestures: true });
-          setStatus('App ready');
+          setSdkStatus('Ready called successfully');
         } catch (e) {
-          setStatus('Ready call failed: ' + (e instanceof Error ? e.message : String(e)));
+          setSdkStatus('Ready call failed: ' + (e instanceof Error ? e.message : String(e)));
         }
       } catch (e) {
-        setStatus('Error: ' + (e instanceof Error ? e.message : String(e)));
+        setSdkStatus('Failed to load SDK: ' + (e instanceof Error ? e.message : String(e)));
       }
-    }
+    }, 1000); // 1 second delay
     
-    init();
+    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -54,24 +50,42 @@ export default function Home() {
         })} />
       </Head>
       
-      <main className="container mx-auto p-4 max-w-2xl min-h-screen bg-white text-black">
-        <div className="text-center p-8 border-2 border-black rounded-lg my-20 bg-yellow-100">
-          <h1 className="text-2xl font-bold mb-4">DeFi Position Tracker</h1>
-          <div className="text-xl mb-4">Status: {status}</div>
-          
-          <div className="grid grid-cols-1 gap-4 mt-8">
-            <div className="p-4 border border-gray-300 rounded-lg bg-white">
-              <p className="text-lg font-bold">This is a test card</p>
-              <p>If you can see this, the app is rendering correctly.</p>
-            </div>
-            
-            <div className="p-4 border border-gray-300 rounded-lg bg-white">
-              <p className="text-lg font-bold">Frame SDK Status</p>
-              <p>{frameSdk ? 'SDK Loaded' : 'SDK Not Loaded'}</p>
-            </div>
-          </div>
+      {/* Ultra simple content with inline styles */}
+      <div style={{ 
+        padding: '20px',
+        backgroundColor: '#FF0000', 
+        color: 'white',
+        fontSize: '24px',
+        fontWeight: 'bold',
+        minHeight: '100vh',
+        textAlign: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center'
+      }}>
+        <div style={{ marginBottom: '20px' }}>
+          DEFI TRACKER APP
         </div>
-      </main>
+        
+        <div style={{
+          backgroundColor: '#FFFF00',
+          color: '#000000',
+          padding: '20px',
+          borderRadius: '10px',
+          marginBottom: '20px'
+        }}>
+          THIS IS A TEST CARD
+        </div>
+        
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          color: '#000000',
+          padding: '20px',
+          borderRadius: '10px'
+        }}>
+          SDK Status: {sdkStatus}
+        </div>
+      </div>
     </>
   );
 } 
