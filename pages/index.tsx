@@ -30,12 +30,26 @@ type PositionsResponse = {
   };
 };
 
+type FarcasterUser = {
+  fid: number;
+  username: string;
+  displayName?: string;
+  pfp?: string;
+  custody_address?: string;
+  verified_addresses?: string[];
+  eth_addresses?: string[];
+};
+
 export default function Home() {
   // Basic state
   const [sdkLoaded, setSdkLoaded] = useState(false);
   const [readyCalled, setReadyCalled] = useState(false);
   const [isInFrame, setIsInFrame] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // User state
+  const [user, setUser] = useState<FarcasterUser | null>(null);
+  const [wallets, setWallets] = useState<string[]>([]);
   
   // Positions data
   const [loading, setLoading] = useState(false);
@@ -58,7 +72,7 @@ export default function Home() {
     postUrl: "https://defi-tracker.vercel.app"
   };
 
-  // Initialize SDK and load positions
+  // Initialize SDK and user data
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -85,13 +99,71 @@ export default function Home() {
           const inFrame = await sdk.isInMiniApp();
           setIsInFrame(inFrame);
           console.log('In frame detected:', inFrame);
+          
+          // If in frame, get user data from SDK context
+          if (inFrame) {
+            try {
+              // Farcaster SDK provides user data directly in the context after ready() is called
+              const userData = sdk.user;
+              console.log('Farcaster user data:', userData);
+              
+              if (userData && userData.fid) {
+                setUser(userData);
+                
+                // Collect wallets from user data
+                const addresses: string[] = [];
+                
+                // Add custody address if present
+                if (userData.custody_address) {
+                  addresses.push(userData.custody_address);
+                }
+                
+                // Add verified addresses if present
+                if (userData.verified_addresses && userData.verified_addresses.length > 0) {
+                  addresses.push(...userData.verified_addresses);
+                }
+                
+                // Add eth addresses if present
+                if (userData.eth_addresses && userData.eth_addresses.length > 0) {
+                  addresses.push(...userData.eth_addresses);
+                }
+                
+                // If no addresses found, add a default test address
+                if (addresses.length === 0) {
+                  addresses.push('0x71C7656EC7ab88b098defB751B7401B5f6d8976F');
+                }
+                
+                setWallets(addresses);
+                console.log('Found user wallets:', addresses);
+                
+                // Load positions for these wallets
+                loadPositions(addresses);
+              } else {
+                console.log('No user data found in SDK context, using default wallets');
+                const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
+                setWallets(defaultWallets);
+                loadPositions(defaultWallets);
+              }
+            } catch (e) {
+              console.error('Error getting user data from SDK:', e);
+              const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
+              setWallets(defaultWallets);
+              loadPositions(defaultWallets);
+            }
+          } else {
+            // Not in frame, use default wallet for testing
+            const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
+            setWallets(defaultWallets);
+            loadPositions(defaultWallets);
+          }
         } catch (e) {
           console.error('SDK initialization error:', e);
           setError(`SDK error: ${e instanceof Error ? e.message : String(e)}`);
+          // Try to load positions with default wallet anyway
+          const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
+          setWallets(defaultWallets);
+          loadPositions(defaultWallets);
         }
-        
-        // Load positions directly
-        loadPositions();
       } catch (e) {
         console.error('App initialization error:', e);
         setError(`Initialization error: ${e instanceof Error ? e.message : String(e)}`);
@@ -102,25 +174,25 @@ export default function Home() {
   }, []);
   
   // Function to load positions
-  const loadPositions = async () => {
+  const loadPositions = async (addressList: string[] = wallets) => {
+    if (!addressList.length) {
+      setError('No wallet addresses to load positions for');
+      return;
+    }
+    
     try {
       setLoading(true);
-      console.log('Loading positions...');
+      console.log('Loading positions for wallets:', addressList);
       
-      // Sample addresses - use these directly
-      const addresses = [
-        '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-        '0xdAC17F958D2ee523a2206206994597C13D831ec7'
-      ];
-      
-      // Call the standalone test endpoint for positions
-      const response = await axios.get('/api/test/positions-standalone', {
-        params: { addresses }
+      // Call the mini-app-positions endpoint
+      const response = await axios.get('/api/mini-app-positions', {
+        params: { addresses: addressList }
       });
       
       console.log('Positions loaded:', response.data);
       setPositions(response.data.positions);
       setSummary(response.data.summary);
+      setError(null);
     } catch (e) {
       console.error('Failed to load positions:', e);
       setError(`Failed to load positions: ${e instanceof Error ? e.message : String(e)}`);
@@ -169,6 +241,45 @@ export default function Home() {
       }}>
         <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>DeFi Position Tracker</h1>
         
+        {/* User info when available */}
+        {user && (
+          <div style={{ 
+            padding: '15px', 
+            backgroundColor: '#f0f4ff', 
+            borderRadius: '8px',
+            border: '1px solid #c7d3f9',
+            marginBottom: '15px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            {user.pfp && (
+              <div style={{ 
+                width: '40px', 
+                height: '40px', 
+                borderRadius: '50%', 
+                overflow: 'hidden',
+                flexShrink: 0
+              }}>
+                <img 
+                  src={user.pfp} 
+                  alt={user.displayName || user.username} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                />
+              </div>
+            )}
+            <div>
+              <p style={{ margin: '0', fontWeight: 'bold' }}>{user.displayName || user.username}</p>
+              <p style={{ margin: '0', fontSize: '12px', color: '#666' }}>@{user.username}</p>
+              {wallets.length > 0 && (
+                <p style={{ margin: '4px 0 0 0', fontSize: '10px', color: '#666' }}>
+                  {wallets.length} wallet{wallets.length !== 1 ? 's' : ''} connected
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+        
         {/* Simple status - minimal debug info */}
         <div style={{ 
           padding: '15px', 
@@ -182,7 +293,7 @@ export default function Home() {
             <strong>SDK:</strong> {sdkLoaded ? '✅' : '❌'} | 
             <strong>Ready:</strong> {readyCalled ? '✅' : '❌'} | 
             <strong>Frame:</strong> {isInFrame ? '✅' : '❌'} | 
-            <button onClick={loadPositions} style={{ 
+            <button onClick={() => loadPositions()} style={{ 
               marginLeft: '8px', 
               padding: '2px 6px', 
               fontSize: '10px', 
@@ -217,7 +328,7 @@ export default function Home() {
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite'
               }}></div>
-              <p style={{ marginTop: '10px' }}>Loading DeFi positions...</p>
+              <p style={{ marginTop: '10px' }}>Loading your DeFi positions...</p>
             </div>
           )}
           
@@ -225,7 +336,7 @@ export default function Home() {
           {!loading && error && (
             <div style={{ padding: '15px', backgroundColor: 'rgba(255, 59, 48, 0.1)', borderRadius: '6px' }}>
               <p style={{ color: '#FF3B30', margin: 0 }}>{error}</p>
-              <button onClick={loadPositions} style={{ 
+              <button onClick={() => loadPositions()} style={{ 
                 marginTop: '10px', 
                 padding: '8px 16px', 
                 backgroundColor: '#6C5CE7', 
@@ -260,7 +371,7 @@ export default function Home() {
               {/* Position List */}
               <div>
                 {positions.length === 0 ? (
-                  <p>No positions found. Try reloading the data.</p>
+                  <p>No positions found for your connected wallets. Try adding more wallets or connecting to DeFi apps.</p>
                 ) : (
                   <div>
                     {positions.map(position => (
@@ -316,6 +427,24 @@ export default function Home() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+          
+          {/* No positions loaded yet */}
+          {!loading && !error && (!summary || !positions) && (
+            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+              <p>Loading your DeFi positions...</p>
+              <button onClick={() => loadPositions()} style={{ 
+                marginTop: '10px', 
+                padding: '8px 16px', 
+                backgroundColor: '#6C5CE7', 
+                color: 'white', 
+                border: 'none', 
+                borderRadius: '6px',
+                cursor: 'pointer' 
+              }}>
+                Load Positions
+              </button>
             </div>
           )}
         </div>
