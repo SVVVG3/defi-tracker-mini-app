@@ -44,18 +44,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Main action - Track DeFi Positions
         return res.status(200).json({
           frames: {
-            version: 'vNext',
-            image: 'https://defi-tracker.vercel.app/og-image.png',
+            version: "vNext",
+            image: "https://defi-tracker.vercel.app/og-image.png",
             buttons: [
               {
-                label: 'View My Positions',
-                action: 'post',
+                label: "View My Positions",
+                action: "post",
               },
               {
-                label: 'Back',
-                action: 'post',
+                label: "Back",
+                action: "post",
               }
             ],
+            postUrl: "https://defi-tracker.vercel.app/api/frame-action",
           }
         });
       
@@ -63,14 +64,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Default response for any other button or if buttonIndex is missing
         return res.status(200).json({
           frames: {
-            version: 'vNext',
-            image: 'https://defi-tracker.vercel.app/og-image.png',
+            version: "vNext",
+            image: "https://defi-tracker.vercel.app/og-image.png",
             buttons: [
               {
-                label: 'Track My DeFi Positions',
-                action: 'post',
+                label: "Track My DeFi Positions",
+                action: "post",
               }
             ],
+            postUrl: "https://defi-tracker.vercel.app/api/frame-action",
           }
         });
     }

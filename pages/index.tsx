@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import axios from 'axios';
+import farcasterSDK from '../src/utils/farcaster-sdk';
 
 // Simplified position types
 type Token = {
@@ -52,85 +53,83 @@ export default function Home() {
   const [wallets, setWallets] = useState<string[]>([]);
   
   // Positions data
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [positions, setPositions] = useState<Position[]>([]);
   const [summary, setSummary] = useState<PositionsResponse['summary'] | null>(null);
 
-  // Log environment info at startup
+  // Debug log
   useEffect(() => {
-    console.log('Environment info:', {
-      nodeEnv: process.env.NODE_ENV,
-      isBrowser: typeof window !== 'undefined',
-      hasFarcasterSDK: typeof window !== 'undefined' && !!(window as any).sdk,
-      windowKeys: typeof window !== 'undefined' ? Object.keys(window).filter(k => k.includes('sdk')).join(', ') : 'none'
+    console.log('App State:', {
+      sdkLoaded,
+      readyCalled,
+      isInFrame,
+      error,
+      userPresent: !!user,
+      walletCount: wallets.length,
+      positionCount: positions.length,
+      loading
     });
-  }, []);
+  }, [sdkLoaded, readyCalled, isInFrame, error, user, wallets, positions, loading]);
 
-  // Initialize app - completely revised SDK detection
+  // Initialize app with the SDK manager
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        console.log('Initializing app...');
+        // Always load positions with test wallet as fallback
+        const testWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
         
-        // DEVELOPMENT MODE: Use mock data if we're in development or SDK is not available
-        if (process.env.NODE_ENV === 'development' || typeof window === 'undefined' || !(window as any).sdk) {
-          console.log('Using development mode with mock data');
-          
-          // Set flags for development mode
-          setSdkLoaded(false);
-          setReadyCalled(false);
-          setIsInFrame(false);
-          
-          // Use test wallet address for development
-          const testWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
-          setWallets(testWallets);
-          
-          // Load mock positions data
-          await loadPositions(testWallets);
-          return;
-        }
-        
-        // FARCASTER MODE: Running in Farcaster client with SDK
-        console.log('Detected Farcaster SDK, using production mode');
-        
-        // Get the SDK from window object
-        const sdk = (window as any).sdk;
-        setSdkLoaded(true);
-        
+        // Try to get from SDK, otherwise use mock
         try {
-          // Tell Farcaster app we're ready (hides loading screen)
-          await sdk.actions.ready();
-          setReadyCalled(true);
-          console.log('Ready signal sent to Farcaster');
-
-          // Check user context from SDK
-          if (sdk.user) {
-            console.log('Found user data in SDK:', sdk.user);
-            setUser(sdk.user);
+          // Get SDK from our manager (it handles polling internally)
+          const sdk = await farcasterSDK.initialize();
+          
+          if (sdk) {
+            console.log('SDK initialized via manager:', sdk);
+            setSdkLoaded(true);
             
-            // Extract wallet addresses from user data
-            const addresses = extractWalletAddresses(sdk.user);
-            if (addresses.length > 0) {
-              setWallets(addresses);
-              console.log('Using wallets from Farcaster user:', addresses);
-              
-              // Load positions for these wallets
-              await loadPositions(addresses);
-            } else {
-              console.log('No wallet addresses found in Farcaster user data');
-              setError('No wallet addresses available. Please connect a wallet to your Farcaster account.');
+            // Send ready signal
+            const readySent = await farcasterSDK.sendReady();
+            setReadyCalled(readySent);
+            
+            if (readySent) {
+              console.log('Ready signal sent to Farcaster');
             }
-          } else {
-            console.log('No user data found in Farcaster SDK');
-            setError('Unable to retrieve user data from Farcaster');
+            
+            // Check if in frame
+            const inFrame = await farcasterSDK.isInFrame();
+            setIsInFrame(inFrame);
+            console.log('Is in Farcaster frame:', inFrame);
+            
+            // Get user information
+            const user = await farcasterSDK.getUser();
+            if (user) {
+              console.log('Found user data in SDK:', user);
+              setUser(user);
+              
+              // Extract wallet addresses from user data
+              const addresses = extractWalletAddresses(user);
+              if (addresses.length > 0) {
+                setWallets(addresses);
+                console.log('Using wallets from Farcaster user:', addresses);
+                await loadPositions(addresses);
+                return;
+              }
+            }
           }
         } catch (error) {
-          console.error('Error in Farcaster SDK operations:', error);
-          setError(`Farcaster SDK error: ${error instanceof Error ? error.message : String(error)}`);
+          console.error('SDK initialization error:', error);
         }
-      } catch (error) {
-        console.error('Initialization error:', error);
-        setError(`App initialization failed: ${error instanceof Error ? error.message : String(error)}`);
+        
+        // Failed to get SDK or valid user data, use mock mode
+        console.log('Using mock data with test wallet');
+        setWallets(testWallets);
+        await loadPositions(testWallets);
+      } catch (e) {
+        console.error('Overall initialization error:', e);
+        setError(`App initialization failed: ${e instanceof Error ? e.message : String(e)}`);
+        
+        // Ensure we always load something, even on error
+        loadPositions(['0x71C7656EC7ab88b098defB751B7401B5f6d8976F']);
       }
     };
     
@@ -200,16 +199,27 @@ export default function Home() {
       
       // Call the API with the addresses
       const response = await axios.get(apiUrl, {
-        params: { addresses: addressList.join(',') }
+        params: { addresses: addressList.join(',') },
+        timeout: 15000 // Increased timeout to 15 seconds for Zapper API calls
       });
       
       console.log('API response status:', response.status);
+      console.log('API response summary:', {
+        positionsCount: response.data?.positions?.length || 0,
+        totalValue: response.data?.summary?.totalValue || 0,
+        hasMockData: response.data?.isMockData || false
+      });
       
       if (response.data && response.data.positions) {
         setPositions(response.data.positions);
         setSummary(response.data.summary);
         setError(null);
         console.log(`Loaded ${response.data.positions.length} positions successfully`);
+        
+        // Alert if we're using mock data
+        if (response.data.isMockData) {
+          console.warn('Using mock position data - API key might be missing or invalid');
+        }
       } else {
         console.error('Invalid API response format:', response.data);
         setError('Invalid data received from API. Please try again.');

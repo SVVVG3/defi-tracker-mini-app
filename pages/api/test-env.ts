@@ -1,61 +1,57 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import env from '../../src/utils/environment';
 
-// Test endpoint to verify environment variables and API access
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Set appropriate CORS headers
+/**
+ * Test Environment Variables API
+ * This is a diagnostic endpoint to verify environment variables are properly loaded
+ * DO NOT use in production as it may expose sensitive configuration
+ */
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Only allow in development mode
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'This endpoint is only available in development mode' });
+  }
+  
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-
-  // Get environment variables (without exposing sensitive data)
-  const envVars = {
-    NODE_ENV: process.env.NODE_ENV,
-    
-    // Zapper API Key info (partial)
-    ZAPPER_API_KEY_EXISTS: !!process.env.ZAPPER_API_KEY,
-    ZAPPER_API_KEY_LENGTH: process.env.ZAPPER_API_KEY ? process.env.ZAPPER_API_KEY.length : 0,
-    ZAPPER_API_KEY_PREFIX: process.env.ZAPPER_API_KEY ? 
-      `${process.env.ZAPPER_API_KEY.substring(0, 4)}...` : 'none',
-    
-    // Feature flags
-    NEXT_PUBLIC_BASE_URL_EXISTS: !!process.env.NEXT_PUBLIC_BASE_URL,
-    NEXT_PUBLIC_ENABLE_TEST_ENDPOINT_EXISTS: !!process.env.NEXT_PUBLIC_ENABLE_TEST_ENDPOINT,
-    
-    // Deployment info
-    VERCEL_ENV: process.env.VERCEL_ENV || 'not_vercel',
-    VERCEL_URL: process.env.VERCEL_URL || 'not_vercel',
+  
+  // Only allow GET requests
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  
+  // Collect environment information
+  const envInfo = {
+    nodeEnv: process.env.NODE_ENV,
+    nextPublicKeys: Object.keys(process.env)
+      .filter(key => key.startsWith('NEXT_PUBLIC_'))
+      .reduce((obj, key) => {
+        // Only show first few characters of values for security
+        obj[key] = typeof process.env[key] === 'string' ? 
+          `${(process.env[key] as string).substring(0, 4)}...` : 
+          process.env[key];
+        return obj;
+      }, {} as Record<string, any>),
+    envHelperValues: {
+      zapperApiKey: env.getZapperApiKey() ? 
+        `${env.getZapperApiKey().substring(0, 4)}... (${env.getZapperApiKey().length} chars)` : 
+        'Not found',
+      isDevelopment: env.isDevelopment(),
+      isProduction: env.isProduction(),
+    },
+    systemInfo: {
+      platform: process.platform,
+      nodeVersion: process.version,
+    }
   };
   
-  // Check for runtime environment details
-  const runtimeInfo = {
-    nodeVersion: process.version,
-    platform: process.platform,
-    memory: process.memoryUsage(),
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  };
-  
-  // Get request metadata
-  const requestInfo = {
-    host: req.headers.host,
-    referer: req.headers.referer,
-    userAgent: req.headers['user-agent'],
-    origin: req.headers.origin,
-    forwardedFor: req.headers['x-forwarded-for'],
-    realIp: req.headers['x-real-ip'],
-    protocol: req.headers['x-forwarded-proto'] || 'http',
-  };
-  
-  // Return environment information (safe, no actual secrets)
-  res.status(200).json({
-    environment: envVars,
-    runtime: runtimeInfo,
-    request: requestInfo,
-    message: "Environment test endpoint - use for debugging only"
-  });
+  // Return the environment information
+  return res.status(200).json(envInfo);
 } 

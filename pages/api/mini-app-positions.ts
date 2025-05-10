@@ -1,8 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
+import env from '../../src/utils/environment';
 
-// API keys
-const ZAPPER_API_KEY = process.env.ZAPPER_API_KEY || '';
+// API keys - Get from environment variables
+const ZAPPER_API_KEY = env.getZapperApiKey();
 
 // This endpoint is specifically for the Farcaster Mini App environment
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -17,7 +18,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     zapperKeyExists: !!ZAPPER_API_KEY,
     zapperKeyLength: ZAPPER_API_KEY ? ZAPPER_API_KEY.length : 0,
     zapperKeyStart: ZAPPER_API_KEY ? ZAPPER_API_KEY.substring(0, 4) : 'none',
-    isPlaceholder: ZAPPER_API_KEY.includes('YOUR_'),
+    zapperKeyEnd: ZAPPER_API_KEY ? ZAPPER_API_KEY.substring(ZAPPER_API_KEY.length - 4) : 'none',
+    isPlaceholder: ZAPPER_API_KEY?.includes('YOUR_'),
+    vercelEnv: process.env.VERCEL_ENV || 'not-vercel',
+    allEnvKeys: Object.keys(process.env).filter(k => k.includes('ZAPPER') || k.includes('API') || k.includes('KEY')).join(', ')
   });
 
   // Handle preflight requests
@@ -28,35 +32,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Validate API key immediately - before processing the request
-  if (!ZAPPER_API_KEY || ZAPPER_API_KEY.includes('YOUR_') || ZAPPER_API_KEY.length < 10) {
-    console.error('Invalid Zapper API key:', {
-      keyExists: !!ZAPPER_API_KEY,
-      keyLength: ZAPPER_API_KEY.length,
-      isPlaceholder: ZAPPER_API_KEY.includes('YOUR_')
-    });
-    
-    // Return a more specific error message to help with debugging
-    if (ZAPPER_API_KEY.includes('YOUR_')) {
-      console.error('Error: Zapper API key contains placeholder text "YOUR_"');
-      return res.status(500).json({ 
-        error: 'API Configuration Error', 
-        message: 'The Zapper API key appears to be a placeholder. Please set a valid API key in environment variables.' 
-      });
-    }
-    
-    // In development, we can fall back to mock data
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Development environment detected - returning mock data despite invalid API key');
-      return returnMockData(res);
-    }
-    
-    return res.status(500).json({ 
-      error: 'API Configuration Error',
-      message: 'The Zapper API key is invalid or missing. Please check your environment variables.'
-    });
   }
 
   try {
@@ -118,6 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 status: error.response?.status,
                 statusText: error.response?.statusText,
                 data: error.response?.data,
+                url: error.config?.url,
+                params: error.config?.params
               });
               
               // Check for rate limiting
@@ -286,6 +263,7 @@ function returnMockData(res: NextApiResponse) {
       totalPositions: 3,
       totalValue: 3716.50,
       outOfRangeCount: 1
-    }
+    },
+    isMockData: true
   });
 } 
