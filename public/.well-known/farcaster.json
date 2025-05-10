@@ -7,6 +7,6 @@
     "imageUrl": "https://defi-tracker.vercel.app/og-image.png",
     "buttonTitle": "Track DeFi Positions",
     "splashImageUrl": "https://defi-tracker.vercel.app/logo.png",
-    "splashBackgroundColor": "#4F46E5"
+    "splashBackgroundColor": "#000000"
   }
 } 

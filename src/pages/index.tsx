@@ -254,7 +254,7 @@ export default function Home() {
         name: "DeFi Position Tracker",
         url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker.vercel.app",
         splashImageUrl: "https://defi-tracker.vercel.app/logo.png",
-        splashBackgroundColor: "#4F46E5"
+        splashBackgroundColor: "#000000"
       }
     }
   };
