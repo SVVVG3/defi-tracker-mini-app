@@ -53,12 +53,17 @@ export default function Home() {
         // Check if we're in a frame or development mode
         const inFrame = await sdk.isInMiniApp();
         console.log('Frame SDK loaded, in frame:', inFrame);
+        console.log('SDK context:', sdk.context);
         
-        if (inFrame) {
+        // Additional check for frame context
+        const frameContext = await sdk.context;
+        console.log('Frame context:', frameContext);
+        
+        if (inFrame || frameContext) {
+          console.log('Setting isInFrame to true');
           setIsInFrame(true);
-          // Don't call ready() here - we'll call it after content is loaded
         } else {
-          console.log('Not running in a Farcaster Frame. SDK context:', sdk.context);
+          console.log('Not running in a Farcaster Frame');
           setIsInFrame(false);
         }
         
@@ -78,11 +83,18 @@ export default function Home() {
     const callReady = async () => {
       if (isInFrame && frameSdk && !isLoading) {
         try {
+          console.log('Attempting to call ready()...');
           await frameSdk.actions.ready();
           console.log('Successfully called ready() after content loaded');
         } catch (readyError) {
           console.error('Error calling ready():', readyError);
         }
+      } else {
+        console.log('Not calling ready() because:', {
+          isInFrame,
+          hasFrameSdk: !!frameSdk,
+          isLoading
+        });
       }
     };
 
