@@ -44,6 +44,32 @@ export default function Home() {
   const [frameDetectionStatus, setFrameDetectionStatus] = useState<string>('Checking frame environment...');
   const [frameError, setFrameError] = useState<string | null>(null);
 
+  // Generate the frame metadata
+  const frameMetadata = {
+    version: "next",
+    imageUrl: "https://defi-tracker.vercel.app/og-image.png",
+    button: {
+      title: "Track DeFi Positions",
+      action: {
+        type: "launch_frame",
+        name: "DeFi Position Tracker",
+        url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker.vercel.app",
+        splashImageUrl: "https://defi-tracker.vercel.app/logo.png",
+        splashBackgroundColor: "#000000"
+      }
+    }
+  };
+
+  // Initialize frame metadata immediately
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const meta = document.createElement('meta');
+      meta.setAttribute('name', 'fc:frame');
+      meta.setAttribute('content', JSON.stringify(frameMetadata));
+      document.head.appendChild(meta);
+    }
+  }, []);
+
   // Dynamically load the Farcaster Frame SDK on the client side only
   useEffect(() => {
     const loadSDK = async () => {
@@ -63,17 +89,18 @@ export default function Home() {
             await sdk.actions.ready();
             setFrameDetectionStatus('App loaded successfully!');
           } catch (readyError) {
+            console.error('Failed to call ready():', readyError);
             setFrameError('Failed to dismiss splash screen');
           }
         } else {
           setFrameDetectionStatus('Not running in Farcaster Frame');
           setIsInFrame(false);
         }
-        
-        setIsLoading(false);
       } catch (err) {
+        console.error('SDK initialization error:', err);
         setFrameError('Failed to initialize Farcaster SDK');
         setIsInFrame(false);
+      } finally {
         setIsLoading(false);
       }
     };
@@ -242,22 +269,6 @@ export default function Home() {
     } catch (err) {
       console.error('Error fetching positions:', err);
       setError('Failed to fetch position data.');
-    }
-  };
-
-  // Generate the frame metadata
-  const frameMetadata = {
-    version: "next",
-    imageUrl: "https://defi-tracker.vercel.app/og-image.png",
-    button: {
-      title: "Track DeFi Positions",
-      action: {
-        type: "launch_frame",
-        name: "DeFi Position Tracker",
-        url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker.vercel.app",
-        splashImageUrl: "https://defi-tracker.vercel.app/logo.png",
-        splashBackgroundColor: "#000000"
-      }
     }
   };
 
