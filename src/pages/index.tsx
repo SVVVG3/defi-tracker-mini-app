@@ -58,6 +58,13 @@ export default function Home() {
         if (inFrame) {
           setFrameDetectionStatus('Frame detected! Loading app...');
           setIsInFrame(true);
+          // Call ready() immediately when we detect we're in a frame
+          try {
+            await sdk.actions.ready();
+            setFrameDetectionStatus('App loaded successfully!');
+          } catch (readyError) {
+            setFrameError('Failed to dismiss splash screen');
+          }
         } else {
           setFrameDetectionStatus('Not running in Farcaster Frame');
           setIsInFrame(false);
@@ -73,23 +80,6 @@ export default function Home() {
 
     loadSDK();
   }, []);
-
-  // New useEffect to call ready() when content is loaded
-  useEffect(() => {
-    const callReady = async () => {
-      if (isInFrame && frameSdk && !isLoading) {
-        try {
-          setFrameDetectionStatus('App ready, dismissing splash screen...');
-          await frameSdk.actions.ready();
-          setFrameDetectionStatus('App loaded successfully!');
-        } catch (readyError) {
-          setFrameError('Failed to dismiss splash screen');
-        }
-      }
-    };
-
-    callReady();
-  }, [isInFrame, frameSdk, isLoading]);
 
   // Enable developer mode
   const enableDevMode = () => {
@@ -257,7 +247,7 @@ export default function Home() {
 
   // Generate the frame metadata
   const frameMetadata = {
-    version: "next", 
+    version: "next",
     imageUrl: "https://defi-tracker.vercel.app/og-image.png",
     button: {
       title: "Track DeFi Positions",
