@@ -43,6 +43,7 @@ export default function Home() {
   const [devModeEnabled, setDevModeEnabled] = useState(false);
   const [frameDetectionStatus, setFrameDetectionStatus] = useState<string>('Checking frame environment...');
   const [frameError, setFrameError] = useState<string | null>(null);
+  const [isContentReady, setIsContentReady] = useState(false);
 
   // Dynamically load the Farcaster Frame SDK on the client side only
   useEffect(() => {
@@ -58,15 +59,6 @@ export default function Home() {
         if (inFrame) {
           setFrameDetectionStatus('Frame detected! Loading app...');
           setIsInFrame(true);
-          
-          // Call ready() immediately when we detect we're in a frame
-          try {
-            await sdk.actions.ready();
-            setFrameDetectionStatus('App loaded successfully!');
-          } catch (readyError) {
-            console.error('Failed to call ready():', readyError);
-            setFrameError('Failed to dismiss splash screen');
-          }
         } else {
           setFrameDetectionStatus('Not running in Farcaster Frame');
           setIsInFrame(false);
@@ -83,10 +75,26 @@ export default function Home() {
     loadSDK();
   }, []);
 
+  // Call ready() only when content is actually ready to be displayed
+  useEffect(() => {
+    const callReady = async () => {
+      if (isInFrame && frameSdk && isContentReady && !isLoading) {
+        try {
+          await frameSdk.actions.ready({ disableNativeGestures: true });
+          setFrameDetectionStatus('App loaded successfully!');
+        } catch (readyError) {
+          console.error('Failed to call ready():', readyError);
+          setFrameError('Failed to dismiss splash screen');
+        }
+      }
+    };
+
+    callReady();
+  }, [isInFrame, frameSdk, isContentReady, isLoading]);
+
   // Enable developer mode
   const enableDevMode = () => {
     setDevModeEnabled(true);
-    // Mock the Frame environment
     setIsInFrame(true);
   };
 
@@ -110,75 +118,54 @@ export default function Home() {
       const { data: nonceData } = await axios.post('/api/auth/nonce');
       const { nonce, sessionId } = nonceData;
       
-      console.log('Got nonce:', nonce, 'with session:', sessionId);
-      
       if (devModeEnabled) {
         // In dev mode, mock the authentication
-        console.log('Using dev mode authentication');
+        const mockUser = {
+          fid: 12345,
+          username: 'devuser',
+          displayName: 'Development User',
+          pfp: 'https://picsum.photos/200'
+        };
         
-        // Mock authentication response - using immediate execution instead of setTimeout
-        try {
-          console.log('Setting up mock authentication data');
-          
-          const mockUser = {
-            fid: 12345,
-            username: 'devuser',
-            displayName: 'Development User',
-            pfp: 'https://picsum.photos/200'
-          };
-          
-          // Mock token
-          const mockToken = 'dev-token-12345';
-          
-          console.log('Setting mock user and token');
-          setUser(mockUser);
-          setToken(mockToken);
-          setIsAuthenticated(true);
-          
-          // Mock wallet data
-          const mockWallets = {
-            eth: ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F', '0xdAC17F958D2ee523a2206206994597C13D831ec7'],
-            sol: [],
-            custody_address: '0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199'
-          };
-          
-          console.log('Setting mock wallets');
-          setWallets(mockWallets);
-          
-          // Mock positions data
-          const mockPositions = [
-            {
-              id: 'uniswap-v3-eth-usdc',
-              appName: 'Uniswap V3',
-              label: 'ETH-USDC',
-              value: 1250.75,
-              isInRange: true,
-              tokens: [{ symbol: 'ETH' }, { symbol: 'USDC' }]
-            },
-            {
-              id: 'aerodrome-weth-usdc',
-              appName: 'Aerodrome',
-              label: 'WETH-USDC',
-              value: 890.25,
-              isInRange: false,
-              tokens: [{ symbol: 'WETH' }, { symbol: 'USDC' }]
-            }
-          ];
-          
-          console.log('Setting mock positions');
-          setPositions(mockPositions);
-          console.log('Mock authentication complete');
-        } catch (mockErr) {
-          console.error('Error in mock authentication:', mockErr);
-          setError('Error during mock authentication setup');
-        } finally {
-          setIsAuthenticating(false);
-        }
+        const mockToken = 'dev-token-12345';
+        
+        setUser(mockUser);
+        setToken(mockToken);
+        setIsAuthenticated(true);
+        
+        const mockWallets = {
+          eth: ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F', '0xdAC17F958D2ee523a2206206994597C13D831ec7'],
+          sol: [],
+          custody_address: '0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199'
+        };
+        
+        setWallets(mockWallets);
+        
+        const mockPositions = [
+          {
+            id: 'uniswap-v3-eth-usdc',
+            appName: 'Uniswap V3',
+            label: 'ETH-USDC',
+            value: 1250.75,
+            isInRange: true,
+            tokens: [{ symbol: 'ETH' }, { symbol: 'USDC' }]
+          },
+          {
+            id: 'aerodrome-weth-usdc',
+            appName: 'Aerodrome',
+            label: 'WETH-USDC',
+            value: 890.25,
+            isInRange: false,
+            tokens: [{ symbol: 'WETH' }, { symbol: 'USDC' }]
+          }
+        ];
+        
+        setPositions(mockPositions);
+        setIsContentReady(true);
       } else {
         // Normal Farcaster authentication
         try {
           const signInResult = await frameSdk.actions.signIn({ nonce });
-          console.log('Sign in result:', signInResult);
           
           // Verify signature with our backend
           const { data: authData } = await axios.post('/api/auth/verify', {
@@ -222,6 +209,7 @@ export default function Home() {
       if (data.eth.length > 0) {
         await fetchPositions(authToken, data.eth);
       }
+      setIsContentReady(true);
     } catch (err) {
       console.error('Error fetching wallets:', err);
       setError('Failed to fetch wallet data.');
