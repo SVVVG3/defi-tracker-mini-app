@@ -36,27 +36,20 @@ export default function Home() {
         
         setSdkLoaded(true);
         
-        // Check if we're in a frame environment
+        // CRITICAL CHANGE: Call ready() immediately without checking for frame
         try {
-          const inFrame = await sdk.isInMiniApp();
-          if (!isMounted) return;
+          await sdk.actions.ready({ disableNativeGestures: true });
+          if (isMounted) setReadyCalled(true);
           
-          setIsInFrame(inFrame);
-          
-          // Call ready ONLY if we're in a frame
-          if (inFrame) {
-            // Add a slight delay to ensure rendering is complete
-            setTimeout(async () => {
-              try {
-                await sdk.actions.ready({ disableNativeGestures: true });
-                if (isMounted) setReadyCalled(true);
-              } catch (e) {
-                if (isMounted) setError(`Ready error: ${e instanceof Error ? e.message : String(e)}`);
-              }
-            }, 300);
+          // Check if we're in a frame environment AFTER calling ready()
+          try {
+            const inFrame = await sdk.isInMiniApp();
+            if (isMounted) setIsInFrame(inFrame);
+          } catch (e) {
+            if (isMounted) setError(`Frame detection error: ${e instanceof Error ? e.message : String(e)}`);
           }
         } catch (e) {
-          if (isMounted) setError(`Frame detection error: ${e instanceof Error ? e.message : String(e)}`);
+          if (isMounted) setError(`Ready error: ${e instanceof Error ? e.message : String(e)}`);
         }
       } catch (e) {
         if (isMounted) setError(`SDK loading error: ${e instanceof Error ? e.message : String(e)}`);
@@ -121,8 +114,8 @@ export default function Home() {
         }}>
           <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>Status Information</h2>
           <p><strong>SDK Loaded:</strong> {sdkLoaded ? '✅' : '❌'}</p>
-          <p><strong>In Frame:</strong> {isInFrame ? '✅' : '❌'}</p>
           <p><strong>Ready Called:</strong> {readyCalled ? '✅' : '❌'}</p>
+          <p><strong>In Frame (checked after ready):</strong> {isInFrame ? '✅' : '❌'}</p>
           {error && (
             <p style={{ color: 'red' }}><strong>Error:</strong> {error}</p>
           )}
@@ -136,7 +129,7 @@ export default function Home() {
           marginBottom: '15px' 
         }}>
           <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>App Status</h3>
-          <p>{isInFrame ? 'Running in Farcaster Frame' : 'Running in browser'}</p>
+          <p>App loaded and ready</p>
         </div>
       </div>
     </>
