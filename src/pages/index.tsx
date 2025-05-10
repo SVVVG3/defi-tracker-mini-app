@@ -51,11 +51,18 @@ export default function Home() {
         setFrameSdk(sdk);
         
         // Check if we're in a frame or development mode
-        const inFrame = !!sdk.context;
+        const inFrame = await sdk.isInMiniApp();
         console.log('Frame SDK loaded, in frame:', inFrame);
         
         if (inFrame) {
           setIsInFrame(true);
+          // Call ready() immediately to dismiss splash screen
+          try {
+            await sdk.actions.ready();
+            console.log('Successfully called ready()');
+          } catch (readyError) {
+            console.error('Error calling ready():', readyError);
+          }
         } else {
           console.log('Not running in a Farcaster Frame. SDK context:', sdk.context);
           setIsInFrame(false);
@@ -239,27 +246,18 @@ export default function Home() {
   // Generate the frame metadata
   const frameMetadata = {
     version: "next", 
-    imageUrl: "https://defi-tracker.example.com/og-image.png",
+    imageUrl: "https://defi-tracker-mini-app.vercel.app/og-image.png",
     button: {
       title: "Track DeFi Positions",
       action: {
         type: "launch_frame",
         name: "DeFi Position Tracker",
-        url: process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000",
-        splashImageUrl: "https://defi-tracker.example.com/logo.png",
+        url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker-mini-app.vercel.app",
+        splashImageUrl: "https://defi-tracker-mini-app.vercel.app/logo.png",
         splashBackgroundColor: "#4F46E5"
       }
     }
   };
-
-  // Call the ready method once the app is loaded
-  useEffect(() => {
-    if (isInFrame && frameSdk && !isLoading) {
-      frameSdk.actions.ready().catch((err: Error) => {
-        console.error('Error calling ready:', err);
-      });
-    }
-  }, [isInFrame, frameSdk, isLoading]);
 
   // Render content based on state
   const renderContent = () => {
