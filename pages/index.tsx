@@ -78,32 +78,54 @@ export default function Home() {
       try {
         console.log('Initializing app...');
         
-        // Initialize SDK
+        // Initialize SDK - always use the injected SDK in Farcaster frames
         let sdk;
         try {
-          sdk = typeof window !== 'undefined' && (window as any).sdk;
-          if (!sdk) {
-            const imported = await import('@farcaster/frame-sdk');
-            sdk = imported.sdk;
+          // In a Farcaster frame, the SDK is injected into window
+          if (typeof window !== 'undefined') {
+            console.log('Window object exists, checking for SDK...');
+            
+            // Access the SDK directly from window (Farcaster injects it)
+            sdk = (window as any).sdk;
+            
+            if (sdk) {
+              console.log('Found SDK in window object');
+            } else {
+              console.log('SDK not found in window object, will try import');
+              const imported = await import('@farcaster/frame-sdk');
+              sdk = imported.sdk;
+              console.log('Imported SDK from package');
+            }
+          } else {
+            console.log('Window not defined (SSR context)');
+            // Handle SSR case
           }
           
           setSdkLoaded(true);
-          console.log('SDK loaded successfully');
+          console.log('SDK reference acquired');
           
-          // Call ready immediately
-          await sdk.actions.ready();
-          setReadyCalled(true);
-          console.log('Ready called successfully');
+          // Call ready
+          if (sdk && sdk.actions && sdk.actions.ready) {
+            await sdk.actions.ready();
+            setReadyCalled(true);
+            console.log('Ready called successfully');
+          } else {
+            console.error('SDK actions or ready method not available:', sdk);
+          }
           
           // Check if in frame
-          const inFrame = await sdk.isInMiniApp();
+          const inFrame = sdk && typeof sdk.isInMiniApp === 'function' ? await sdk.isInMiniApp() : false;
           setIsInFrame(inFrame);
           console.log('In frame detected:', inFrame);
           
-          // If in frame, get user data from SDK context
+          // If in frame, automatically try to get user context
           if (inFrame) {
             try {
-              // Farcaster SDK provides user data directly in the context after ready() is called
+              // Debug user context
+              console.log('SDK user object:', sdk.user);
+              console.log('SDK context:', sdk.context);
+              
+              // Get user data from SDK
               const userData = sdk.user;
               console.log('Farcaster user data:', userData);
               
@@ -116,45 +138,52 @@ export default function Home() {
                 // Add custody address if present
                 if (userData.custody_address) {
                   addresses.push(userData.custody_address);
+                  console.log('Added custody address:', userData.custody_address);
                 }
                 
                 // Add verified addresses if present
                 if (userData.verified_addresses && userData.verified_addresses.length > 0) {
                   addresses.push(...userData.verified_addresses);
+                  console.log('Added verified addresses:', userData.verified_addresses);
                 }
                 
                 // Add eth addresses if present
                 if (userData.eth_addresses && userData.eth_addresses.length > 0) {
                   addresses.push(...userData.eth_addresses);
+                  console.log('Added eth addresses:', userData.eth_addresses);
                 }
                 
                 // If no addresses found, add a default test address
                 if (addresses.length === 0) {
-                  addresses.push('0x71C7656EC7ab88b098defB751B7401B5f6d8976F');
+                  const testAddr = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
+                  addresses.push(testAddr);
+                  console.log('No user addresses found, using test address:', testAddr);
                 }
                 
                 setWallets(addresses);
-                console.log('Found user wallets:', addresses);
+                console.log('Using wallets for position lookup:', addresses);
                 
                 // Load positions for these wallets
-                loadPositions(addresses);
+                await loadPositions(addresses);
+                console.log('Positions loading initiated');
               } else {
-                console.log('No user data found in SDK context, using default wallets');
+                console.log('No valid user data found, using default wallets');
                 const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
                 setWallets(defaultWallets);
-                loadPositions(defaultWallets);
+                await loadPositions(defaultWallets);
               }
             } catch (e) {
-              console.error('Error getting user data from SDK:', e);
+              console.error('Error handling user data:', e);
               const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
               setWallets(defaultWallets);
-              loadPositions(defaultWallets);
+              await loadPositions(defaultWallets);
             }
           } else {
             // Not in frame, use default wallet for testing
+            console.log('Not in frame, using default test wallet');
             const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
             setWallets(defaultWallets);
-            loadPositions(defaultWallets);
+            await loadPositions(defaultWallets);
           }
         } catch (e) {
           console.error('SDK initialization error:', e);
@@ -162,7 +191,7 @@ export default function Home() {
           // Try to load positions with default wallet anyway
           const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
           setWallets(defaultWallets);
-          loadPositions(defaultWallets);
+          await loadPositions(defaultWallets);
         }
       } catch (e) {
         console.error('App initialization error:', e);
@@ -184,15 +213,36 @@ export default function Home() {
       setLoading(true);
       console.log('Loading positions for wallets:', addressList);
       
+      // Determine the correct API URL based on environment
+      // In production, use the absolute URL to avoid CORS issues in the mini app
+      let apiUrl = '/api/mini-app-positions';
+      
+      // In Farcaster frame environment, we may need to use absolute URLs
+      if (typeof window !== 'undefined') {
+        // Get the deployment URL from window.location
+        const baseUrl = window.location.origin;
+        apiUrl = `${baseUrl}/api/mini-app-positions`;
+        console.log('Using absolute API URL:', apiUrl);
+      }
+      
+      console.log('Calling API endpoint:', apiUrl);
+      
       // Call the mini-app-positions endpoint
-      const response = await axios.get('/api/mini-app-positions', {
+      const response = await axios.get(apiUrl, {
         params: { addresses: addressList }
       });
       
-      console.log('Positions loaded:', response.data);
-      setPositions(response.data.positions);
-      setSummary(response.data.summary);
-      setError(null);
+      console.log('Positions API response:', response.status, response.statusText);
+      console.log('Positions data:', response.data);
+      
+      if (response.data && response.data.positions) {
+        setPositions(response.data.positions);
+        setSummary(response.data.summary);
+        setError(null);
+      } else {
+        console.error('Invalid response data format:', response.data);
+        setError('Invalid data received from API');
+      }
     } catch (e) {
       console.error('Failed to load positions:', e);
       setError(`Failed to load positions: ${e instanceof Error ? e.message : String(e)}`);
@@ -208,23 +258,13 @@ export default function Home() {
         <meta name="description" content="Track your DeFi positions across multiple chains" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         
-        {/* Critical: Use the correct fc:frame metadata format */}
-        <meta property="fc:frame" content={JSON.stringify({
-          version: "next",
-          imageUrl: "https://defi-tracker.vercel.app/og-image.png",
-          button: {
-            title: "Track DeFi Positions",
-            action: {
-              type: "launch_frame",
-              name: "DeFi Position Tracker",
-              url: "https://defi-tracker.vercel.app",
-              splashImageUrl: "https://defi-tracker.vercel.app/logo.png",
-              splashBackgroundColor: "#000000"
-            }
-          }
-        })} />
+        {/* Frame metadata - updated to latest format */}
+        <meta property="fc:frame" content="vNext" />
+        <meta property="fc:frame:image" content="https://defi-tracker.vercel.app/og-image.png" />
+        <meta property="fc:frame:button:1" content="Track My DeFi Positions" />
+        <meta property="fc:frame:post_url" content="https://defi-tracker.vercel.app" />
         
-        {/* Additional farcaster meta tags */}
+        {/* Additional meta tags */}
         <meta property="og:title" content="DeFi Position Tracker" />
         <meta property="og:description" content="Track your DeFi positions across multiple chains" />
         <meta property="og:image" content="https://defi-tracker.vercel.app/og-image.png" />
