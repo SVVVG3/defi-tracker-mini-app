@@ -30,8 +30,19 @@ export default function Home() {
     
     const initSDK = async () => {
       try {
-        // Dynamically import the SDK
-        const { sdk } = await import('@farcaster/frame-sdk');
+        // Use window.sdk if available (in Mini App), otherwise fallback to dynamic import
+        let sdk = typeof window !== 'undefined' && (window as any).sdk;
+        if (!sdk) {
+          try {
+            const imported = await import('@farcaster/frame-sdk');
+            sdk = imported.sdk;
+            if (!sdk) throw new Error('Dynamic import failed');
+            if (isMounted) setError('window.sdk not found, using dynamic import (dev mode)');
+          } catch (e) {
+            if (isMounted) setError('Farcaster SDK not found in window or via import');
+            return;
+          }
+        }
         if (!isMounted) return;
         
         setSdkLoaded(true);
