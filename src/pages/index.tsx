@@ -44,39 +44,6 @@ export default function Home() {
   const [frameDetectionStatus, setFrameDetectionStatus] = useState<string>('Checking frame environment...');
   const [frameError, setFrameError] = useState<string | null>(null);
 
-  // Generate the frame metadata
-  const frameMetadata = {
-    version: "next",
-    imageUrl: "https://defi-tracker.vercel.app/og-image.png",
-    button: {
-      title: "Track DeFi Positions",
-      action: {
-        type: "launch_frame",
-        name: "DeFi Position Tracker",
-        url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker.vercel.app",
-        splashImageUrl: "https://defi-tracker.vercel.app/logo.png",
-        splashBackgroundColor: "#000000"
-      }
-    }
-  };
-
-  // Initialize frame metadata immediately
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // Remove any existing fc:frame meta tag
-      const existingMeta = document.querySelector('meta[name="fc:frame"]');
-      if (existingMeta) {
-        existingMeta.remove();
-      }
-      
-      // Add the new meta tag
-      const meta = document.createElement('meta');
-      meta.setAttribute('name', 'fc:frame');
-      meta.setAttribute('content', JSON.stringify(frameMetadata));
-      document.head.appendChild(meta);
-    }
-  }, []);
-
   // Dynamically load the Farcaster Frame SDK on the client side only
   useEffect(() => {
     const loadSDK = async () => {
@@ -404,7 +371,20 @@ export default function Home() {
         <title>DeFi Position Tracker | Farcaster Mini App</title>
         <meta name="description" content="Track your DeFi positions on Base chain and get alerts when your LPs go out of range" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="fc:frame" content={JSON.stringify(frameMetadata)} />
+        <meta name="fc:frame" content={JSON.stringify({
+          version: "next",
+          imageUrl: "https://defi-tracker.vercel.app/og-image.png",
+          button: {
+            title: "Track DeFi Positions",
+            action: {
+              type: "launch_frame",
+              name: "DeFi Position Tracker",
+              url: process.env.NEXT_PUBLIC_BASE_URL || "https://defi-tracker.vercel.app",
+              splashImageUrl: "https://defi-tracker.vercel.app/logo.png",
+              splashBackgroundColor: "#000000"
+            }
+          }
+        })} />
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <main className="container mx-auto max-w-2xl min-h-screen">
