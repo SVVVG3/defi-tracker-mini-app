@@ -56,159 +56,136 @@ export default function Home() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [summary, setSummary] = useState<PositionsResponse['summary'] | null>(null);
 
-  // Frame metadata
-  const frameMetadata = {
-    version: "next",
-    image: {
-      src: "https://defi-tracker.vercel.app/og-image.png",
-      aspectRatio: "1.91:1"
-    },
-    buttons: [
-      {
-        label: "Track DeFi Positions",
-        action: "post"
-      }
-    ],
-    postUrl: "https://defi-tracker.vercel.app"
-  };
+  // Log environment info at startup
+  useEffect(() => {
+    console.log('Environment info:', {
+      nodeEnv: process.env.NODE_ENV,
+      isBrowser: typeof window !== 'undefined',
+      hasFarcasterSDK: typeof window !== 'undefined' && !!(window as any).sdk,
+      windowKeys: typeof window !== 'undefined' ? Object.keys(window).filter(k => k.includes('sdk')).join(', ') : 'none'
+    });
+  }, []);
 
-  // Initialize SDK and user data
+  // Initialize app - completely revised SDK detection
   useEffect(() => {
     const initializeApp = async () => {
       try {
         console.log('Initializing app...');
         
-        // Check for window.sdk (injected by Farcaster in Mini App environment)
-        if (typeof window !== 'undefined') {
-          console.log('Window object exists, checking for SDK...');
+        // DEVELOPMENT MODE: Use mock data if we're in development or SDK is not available
+        if (process.env.NODE_ENV === 'development' || typeof window === 'undefined' || !(window as any).sdk) {
+          console.log('Using development mode with mock data');
           
-          // Direct access to Farcaster injected SDK
-          const sdk = (window as any).sdk;
+          // Set flags for development mode
+          setSdkLoaded(false);
+          setReadyCalled(false);
+          setIsInFrame(false);
           
-          if (sdk) {
-            console.log('Found Farcaster SDK in window object');
-            setSdkLoaded(true);
+          // Use test wallet address for development
+          const testWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
+          setWallets(testWallets);
+          
+          // Load mock positions data
+          await loadPositions(testWallets);
+          return;
+        }
+        
+        // FARCASTER MODE: Running in Farcaster client with SDK
+        console.log('Detected Farcaster SDK, using production mode');
+        
+        // Get the SDK from window object
+        const sdk = (window as any).sdk;
+        setSdkLoaded(true);
+        
+        try {
+          // Tell Farcaster app we're ready (hides loading screen)
+          await sdk.actions.ready();
+          setReadyCalled(true);
+          console.log('Ready signal sent to Farcaster');
+
+          // Check user context from SDK
+          if (sdk.user) {
+            console.log('Found user data in SDK:', sdk.user);
+            setUser(sdk.user);
             
-            try {
-              // Call ready to hide the splash screen
-              await sdk.actions.ready();
-              setReadyCalled(true);
-              console.log('Ready called successfully');
+            // Extract wallet addresses from user data
+            const addresses = extractWalletAddresses(sdk.user);
+            if (addresses.length > 0) {
+              setWallets(addresses);
+              console.log('Using wallets from Farcaster user:', addresses);
               
-              // Check if in frame/Mini App
-              const inMiniApp = typeof sdk.isInMiniApp === 'function' ? 
-                await sdk.isInMiniApp() : false;
-              setIsInFrame(inMiniApp);
-              console.log('In Mini App context:', inMiniApp);
-              
-              // Debug logging for SDK context
-              console.log('SDK user context:', sdk.user);
-              console.log('SDK full context:', sdk.context);
-              
-              // Get user data from SDK context if in Mini App
-              if (inMiniApp && sdk.user) {
-                const userData = sdk.user;
-                console.log('Farcaster user data:', userData);
-                
-                if (userData && userData.fid) {
-                  setUser(userData);
-                  
-                  // Extract wallet addresses from user data
-                  const addresses = extractWalletAddresses(userData);
-                  setWallets(addresses);
-                  console.log('Using wallets for position lookup:', addresses);
-                  
-                  // Load positions for these wallets
-                  await loadPositions(addresses);
-                  console.log('Positions loading initiated');
-                } else {
-                  console.log('No valid user data found, using default wallets');
-                  const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
-                  setWallets(defaultWallets);
-                  await loadPositions(defaultWallets);
-                }
-              } else {
-                console.log('Not in Mini App or no user context available');
-                // Use default wallet for testing when not in Farcaster
-                const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
-                setWallets(defaultWallets);
-                await loadPositions(defaultWallets);
-              }
-            } catch (e) {
-              console.error('Error in SDK operations:', e);
-              setError(`SDK operation error: ${e instanceof Error ? e.message : String(e)}`);
-              
-              // Use default wallet on error
-              const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
-              setWallets(defaultWallets);
-              await loadPositions(defaultWallets);
+              // Load positions for these wallets
+              await loadPositions(addresses);
+            } else {
+              console.log('No wallet addresses found in Farcaster user data');
+              setError('No wallet addresses available. Please connect a wallet to your Farcaster account.');
             }
           } else {
-            console.log('Farcaster SDK not found in window, using fallback');
-            // Fall back to development mode
-            setSdkLoaded(false);
-            setError('Farcaster SDK not available - running in development mode');
-            
-            // Use default wallet for testing when not in Farcaster
-            const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
-            setWallets(defaultWallets);
-            await loadPositions(defaultWallets);
+            console.log('No user data found in Farcaster SDK');
+            setError('Unable to retrieve user data from Farcaster');
           }
-        } else {
-          console.log('Window not defined (SSR context)');
-          // Handle server-side rendering case
-          setSdkLoaded(false);
+        } catch (error) {
+          console.error('Error in Farcaster SDK operations:', error);
+          setError(`Farcaster SDK error: ${error instanceof Error ? error.message : String(error)}`);
         }
-      } catch (e) {
-        console.error('App initialization error:', e);
-        setError(`Initialization error: ${e instanceof Error ? e.message : String(e)}`);
-        
-        // Try to load positions with default wallet anyway
-        const defaultWallets = ['0x71C7656EC7ab88b098defB751B7401B5f6d8976F'];
-        setWallets(defaultWallets);
-        await loadPositions(defaultWallets);
+      } catch (error) {
+        console.error('Initialization error:', error);
+        setError(`App initialization failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
     
     initializeApp();
   }, []);
   
-  // Helper to extract wallet addresses from user context
+  // Helper to extract wallet addresses from Farcaster user object
   const extractWalletAddresses = (userData: FarcasterUser): string[] => {
     const addresses: string[] = [];
     
-    // Add custody address if present
+    if (!userData) {
+      console.log('No user data provided to extract addresses');
+      return addresses;
+    }
+    
+    // Add custody address if available
     if (userData.custody_address) {
       addresses.push(userData.custody_address);
       console.log('Added custody address:', userData.custody_address);
     }
     
-    // Add verified addresses if present
+    // Add verified addresses if available
     if (userData.verified_addresses && userData.verified_addresses.length > 0) {
-      addresses.push(...userData.verified_addresses);
-      console.log('Added verified addresses:', userData.verified_addresses);
+      for (const addr of userData.verified_addresses) {
+        if (!addresses.includes(addr)) {
+          addresses.push(addr);
+          console.log('Added verified address:', addr);
+        }
+      }
     }
     
-    // Add eth addresses if present
+    // Add ETH addresses if available
     if (userData.eth_addresses && userData.eth_addresses.length > 0) {
-      addresses.push(...userData.eth_addresses);
-      console.log('Added eth addresses:', userData.eth_addresses);
+      for (const addr of userData.eth_addresses) {
+        if (!addresses.includes(addr)) {
+          addresses.push(addr);
+          console.log('Added ETH address:', addr);
+        }
+      }
     }
     
-    // If no addresses found, add a default test address
+    // Log results
     if (addresses.length === 0) {
-      const testAddr = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
-      addresses.push(testAddr);
-      console.log('No user addresses found, using test address:', testAddr);
+      console.log('No addresses found in user data');
+    } else {
+      console.log(`Found ${addresses.length} unique addresses in user data`);
     }
     
     return addresses;
   };
   
-  // Function to load positions
+  // Function to load positions - revised with better error handling
   const loadPositions = async (addressList: string[] = wallets) => {
-    if (!addressList.length) {
-      setError('No wallet addresses to load positions for');
+    if (!addressList || addressList.length === 0) {
+      setError('No wallet addresses provided to load positions');
       return;
     }
     
@@ -216,18 +193,17 @@ export default function Home() {
       setLoading(true);
       console.log('Loading positions for wallets:', addressList);
       
-      // Use absolute URL for API calls in Mini App context
+      // Always use absolute URL for API calls
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
       const apiUrl = `${baseUrl}/api/mini-app-positions`;
       console.log('Calling API endpoint:', apiUrl);
       
-      // Call the mini-app-positions endpoint
+      // Call the API with the addresses
       const response = await axios.get(apiUrl, {
-        params: { addresses: addressList }
+        params: { addresses: addressList.join(',') }
       });
       
-      console.log('Positions API response:', response.status, response.statusText);
-      console.log('Positions data:', response.data);
+      console.log('API response status:', response.status);
       
       if (response.data && response.data.positions) {
         setPositions(response.data.positions);
@@ -235,21 +211,27 @@ export default function Home() {
         setError(null);
         console.log(`Loaded ${response.data.positions.length} positions successfully`);
       } else {
-        console.error('Invalid response data format:', response.data);
-        setError('Invalid data received from API');
+        console.error('Invalid API response format:', response.data);
+        setError('Invalid data received from API. Please try again.');
       }
     } catch (e) {
       console.error('Failed to load positions:', e);
-      // Extract axios error details if available
+      
+      // Extract detailed error information from Axios errors
       if (axios.isAxiosError(e)) {
         const statusCode = e.response?.status;
         const errorMessage = e.response?.data?.error || e.message;
-        setError(`API error (${statusCode}): ${errorMessage}`);
+        
+        // Log error details for debugging
         console.error('API error details:', {
-          status: e.response?.status,
+          status: statusCode,
+          statusText: e.response?.statusText,
           data: e.response?.data,
-          message: e.message
+          url: e.config?.url,
+          method: e.config?.method
         });
+        
+        setError(`API error (${statusCode}): ${errorMessage}`);
       } else {
         setError(`Failed to load positions: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -265,11 +247,11 @@ export default function Home() {
         <meta name="description" content="Track your DeFi positions across multiple chains" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         
-        {/* Frame metadata - using the proper vNext format */}
+        {/* Frame metadata - exact Farcaster Frame specification */}
         <meta property="fc:frame" content="vNext" />
         <meta property="fc:frame:image" content="https://defi-tracker.vercel.app/og-image.png" />
         <meta property="fc:frame:button:1" content="Track My DeFi Positions" />
-        <meta property="fc:frame:post_url" content="https://defi-tracker.vercel.app" />
+        <meta property="fc:frame:post_url" content="https://defi-tracker.vercel.app/api/frame-action" />
         
         {/* Additional meta tags */}
         <meta property="og:title" content="DeFi Position Tracker" />
@@ -327,7 +309,7 @@ export default function Home() {
           </div>
         )}
         
-        {/* Simple status - minimal debug info */}
+        {/* Debug info */}
         <div style={{ 
           padding: '15px', 
           backgroundColor: '#f9f9f9', 
@@ -340,6 +322,7 @@ export default function Home() {
             <strong>SDK:</strong> {sdkLoaded ? '✅' : '❌'} | 
             <strong>Ready:</strong> {readyCalled ? '✅' : '❌'} | 
             <strong>Frame:</strong> {isInFrame ? '✅' : '❌'} | 
+            <strong>Mode:</strong> {process.env.NODE_ENV} |
             <button onClick={() => loadPositions()} style={{ 
               marginLeft: '8px', 
               padding: '2px 6px', 
@@ -480,7 +463,7 @@ export default function Home() {
           {/* No positions loaded yet */}
           {!loading && !error && (!summary || !positions) && (
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-              <p>Loading your DeFi positions...</p>
+              <p>Ready to track your DeFi positions</p>
               <button onClick={() => loadPositions()} style={{ 
                 marginTop: '10px', 
                 padding: '8px 16px', 

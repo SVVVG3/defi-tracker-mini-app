@@ -16,8 +16,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     nodeEnv: process.env.NODE_ENV,
     zapperKeyExists: !!ZAPPER_API_KEY,
     zapperKeyLength: ZAPPER_API_KEY ? ZAPPER_API_KEY.length : 0,
-    // Add partial key info for debugging (first 4 chars)
-    zapperKeyPrefix: ZAPPER_API_KEY ? ZAPPER_API_KEY.substring(0, 4) : 'none',
+    zapperKeyStart: ZAPPER_API_KEY ? ZAPPER_API_KEY.substring(0, 4) : 'none',
+    isPlaceholder: ZAPPER_API_KEY.includes('YOUR_'),
   });
 
   // Handle preflight requests
@@ -30,6 +30,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Validate API key immediately - before processing the request
+  if (!ZAPPER_API_KEY || ZAPPER_API_KEY.includes('YOUR_') || ZAPPER_API_KEY.length < 10) {
+    console.error('Invalid Zapper API key:', {
+      keyExists: !!ZAPPER_API_KEY,
+      keyLength: ZAPPER_API_KEY.length,
+      isPlaceholder: ZAPPER_API_KEY.includes('YOUR_')
+    });
+    
+    // Return a more specific error message to help with debugging
+    if (ZAPPER_API_KEY.includes('YOUR_')) {
+      console.error('Error: Zapper API key contains placeholder text "YOUR_"');
+      return res.status(500).json({ 
+        error: 'API Configuration Error', 
+        message: 'The Zapper API key appears to be a placeholder. Please set a valid API key in environment variables.' 
+      });
+    }
+    
+    // In development, we can fall back to mock data
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Development environment detected - returning mock data despite invalid API key');
+      return returnMockData(res);
+    }
+    
+    return res.status(500).json({ 
+      error: 'API Configuration Error',
+      message: 'The Zapper API key is invalid or missing. Please check your environment variables.'
+    });
+  }
+
   try {
     // Get addresses from query params - these should be the user's wallets
     const { addresses } = req.query;
@@ -40,22 +69,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     
     // Convert to array if not already
-    const addressList = Array.isArray(addresses) ? addresses : [addresses];
+    const addressList = Array.isArray(addresses) ? addresses : addresses.split(',');
     
     // Log the request for debugging
     console.log('Mini app positions request:', { 
       addresses: addressList,
-      hasZapperKey: !!ZAPPER_API_KEY,
-      zapperKeyLength: ZAPPER_API_KEY ? ZAPPER_API_KEY.length : 0
+      addressCount: addressList.length
     });
     
-    // If we don't have a valid Zapper API key, return mock data immediately
-    if (!ZAPPER_API_KEY || ZAPPER_API_KEY.length < 10) {
-      console.warn('Invalid or missing Zapper API key, returning mock data');
-      return returnMockData(res);
-    }
-    
-    // If we have a Zapper API key, use it to fetch real data
     try {
       console.log('Using Zapper API to fetch real data');
       // Fetch positions from Zapper API for each address
