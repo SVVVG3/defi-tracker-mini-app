@@ -41,12 +41,20 @@ type PositionsResponse = {
   };
 };
 
+type FarcasterUser = {
+  fid: number;
+  username: string;
+  displayName?: string;
+  pfp?: string;
+};
+
 export default function Home() {
   // Farcaster SDK state
   const [sdkLoaded, setSdkLoaded] = useState(false);
   const [readyCalled, setReadyCalled] = useState(false);
   const [isInFrame, setIsInFrame] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
+  const [farcasterUser, setFarcasterUser] = useState<FarcasterUser | null>(null);
   
   // Application state
   const { user, token, isAuthenticated, login, logout } = useAuth();
@@ -247,6 +255,26 @@ export default function Home() {
               // Auto-authenticate when in Farcaster mini app environment
               if (inFrame && stage === 'init') {
                 console.log('Detected Farcaster mini app environment, bypassing authentication and going directly to wallet fetching...');
+                
+                // Try to get user info from the SDK context
+                try {
+                  // This is how we get the user info in Farcaster Mini Apps
+                  // The SDK injects the user object into the context after ready() is called
+                  const user = sdk.user;
+                  console.log('Found Farcaster user from SDK context:', user);
+                  
+                  if (user && user.fid) {
+                    setFarcasterUser({
+                      fid: user.fid,
+                      username: user.username || `user_${user.fid}`,
+                      displayName: user.displayName,
+                      pfp: user.pfp
+                    });
+                  }
+                } catch (err) {
+                  console.error('Failed to get user from SDK context:', err);
+                }
+                
                 // Skip authentication and jump straight to wallet retrieval when in Farcaster
                 setStage('wallets');
               }
@@ -272,10 +300,10 @@ export default function Home() {
 
   // Fetch wallets when authenticated
   useEffect(() => {
-    if (isAuthenticated && stage === 'wallets') {
+    if ((isAuthenticated || isInFrame) && stage === 'wallets') {
       fetchWallets();
     }
-  }, [isAuthenticated, stage]);
+  }, [isAuthenticated, isInFrame, stage]);
 
   // Fetch positions when wallets are available
   useEffect(() => {
@@ -339,6 +367,11 @@ export default function Home() {
               <strong>Farcaster Fast Mode:</strong> Using direct data loading for mini app environment
             </p>
           )}
+          {farcasterUser && (
+            <p style={{ color: 'blue', fontSize: '10px', marginTop: '5px' }}>
+              <strong>Farcaster User:</strong> {farcasterUser.displayName || farcasterUser.username} (FID: {farcasterUser.fid})
+            </p>
+          )}
           {sdkError && <p style={{ color: 'red', fontSize: '10px' }}>{sdkError}</p>}
         </div>
         
@@ -351,7 +384,7 @@ export default function Home() {
           marginBottom: '20px' 
         }}>
           {/* Not authenticated state */}
-          {!isAuthenticated && (
+          {!isAuthenticated && !isInFrame && (
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>Track Your DeFi Positions</h2>
               <p style={{ marginBottom: '20px' }}>Sign in with Farcaster to view all your DeFi positions and receive notifications when liquidity positions move out of range.</p>
@@ -381,7 +414,7 @@ export default function Home() {
           )}
           
           {/* Loading wallets */}
-          {isAuthenticated && stage === 'wallets' && (
+          {(isAuthenticated || isInFrame) && stage === 'wallets' && (
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>Loading Your Wallets</h2>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
@@ -423,7 +456,11 @@ export default function Home() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                 <h2 style={{ fontSize: '18px', margin: 0 }}>Your DeFi Positions</h2>
                 <div style={{ fontSize: '12px' }}>
-                  {user && <p style={{ margin: 0 }}>@{user.username}</p>}
+                  {(user || farcasterUser) && (
+                    <p style={{ margin: 0 }}>
+                      @{farcasterUser?.username || user?.username}
+                    </p>
+                  )}
                 </div>
               </div>
               
@@ -561,6 +598,7 @@ export default function Home() {
               <p style={{ margin: '5px 0 0 0', fontSize: '11px' }}>
                 <strong>Current Stage:</strong> {stage} | 
                 <strong>Auth:</strong> {isAuthenticated ? '✅' : '❌'} | 
+                <strong>In Frame:</strong> {isInFrame ? '✅' : '❌'} | 
                 <strong>Wallets:</strong> {wallets.length}
               </p>
             </div>
@@ -568,7 +606,7 @@ export default function Home() {
         </div>
         
         {/* Real-time monitoring */}
-        {isAuthenticated && positionsRequest.data && positionsRequest.data.positions.length > 0 && (
+        {(isAuthenticated || isInFrame) && positionsRequest.data && positionsRequest.data.positions.length > 0 && (
           <div style={{ 
             padding: '15px', 
             backgroundColor: '#f9f9f9', 
@@ -582,7 +620,7 @@ export default function Home() {
         )}
         
         {/* Position Monitor Component (conditionally rendered if authenticated and positions loaded) */}
-        {isAuthenticated && positionsRequest.data && positionsRequest.data.positions.length > 0 && (
+        {(isAuthenticated || isInFrame) && positionsRequest.data && positionsRequest.data.positions.length > 0 && (
           <div style={{ marginTop: '20px' }}>
             <PositionMonitor 
               positions={positionsRequest.data.positions.map(p => ({
@@ -603,7 +641,7 @@ export default function Home() {
         )}
         
         {/* Log out button if authenticated */}
-        {isAuthenticated && (
+        {isAuthenticated && !isInFrame && (
           <div style={{ marginTop: '20px', textAlign: 'center' }}>
             <button 
               onClick={logout}
