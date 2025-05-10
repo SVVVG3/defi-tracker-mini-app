@@ -1,39 +1,85 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Head from 'next/head';
 
 // This is a static page that will load quickly before any JavaScript
 export default function Home() {
+  const [sdkLoaded, setSdkLoaded] = useState(false);
+  const [readyCalled, setReadyCalled] = useState(false);
+  const [isInFrame, setIsInFrame] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Static frame metadata - this is critical
+  const frameMetadata = {
+    version: "next",
+    image: {
+      src: "https://defi-tracker.vercel.app/og-image.png",
+      aspectRatio: "1.91:1"
+    },
+    buttons: [
+      {
+        label: "Track DeFi Positions",
+        action: "post"
+      }
+    ],
+    postUrl: "https://defi-tracker.vercel.app"
+  };
+
   // Mount effect for client-side initialization
   useEffect(() => {
-    // Try to initialize SDK in a non-blocking way
+    let isMounted = true;
+    
     const initSDK = async () => {
       try {
+        // Dynamically import the SDK
         const { sdk } = await import('@farcaster/frame-sdk');
+        if (!isMounted) return;
         
-        // Call ready immediately - the KEY is to call it as early as possible
-        // Not waiting for any state changes or checks
+        setSdkLoaded(true);
+        
+        // Check if we're in a frame environment
         try {
-          await sdk.actions.ready({ disableNativeGestures: true });
-          console.log('Ready called');
+          const inFrame = await sdk.isInMiniApp();
+          if (!isMounted) return;
+          
+          setIsInFrame(inFrame);
+          
+          // Call ready ONLY if we're in a frame
+          if (inFrame) {
+            // Add a slight delay to ensure rendering is complete
+            setTimeout(async () => {
+              try {
+                await sdk.actions.ready({ disableNativeGestures: true });
+                if (isMounted) setReadyCalled(true);
+              } catch (e) {
+                if (isMounted) setError(`Ready error: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }, 300);
+          }
         } catch (e) {
-          console.error('Ready call failed:', e);
+          if (isMounted) setError(`Frame detection error: ${e instanceof Error ? e.message : String(e)}`);
         }
       } catch (e) {
-        console.error('Failed to load SDK:', e);
+        if (isMounted) setError(`SDK loading error: ${e instanceof Error ? e.message : String(e)}`);
       }
     };
 
     // Start initializing without blocking rendering
     initSDK();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return (
     <>
       <Head>
         <title>DeFi Position Tracker</title>
-        <meta name="description" content="Track your DeFi positions on Base chain" />
+        <meta name="description" content="Track your DeFi positions across multiple chains" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-        <meta name="fc:frame" content={JSON.stringify({
+        
+        {/* Critical: Use the correct fc:frame metadata format */}
+        <meta property="fc:frame" content={JSON.stringify({
           version: "next",
           imageUrl: "https://defi-tracker.vercel.app/og-image.png",
           button: {
@@ -47,6 +93,11 @@ export default function Home() {
             }
           }
         })} />
+        
+        {/* Additional farcaster meta tags */}
+        <meta property="og:title" content="DeFi Position Tracker" />
+        <meta property="og:description" content="Track your DeFi positions across multiple chains" />
+        <meta property="og:image" content="https://defi-tracker.vercel.app/og-image.png" />
       </Head>
       
       {/* Pre-rendered HTML structure - this will be visible before any JS loads */}
@@ -68,19 +119,13 @@ export default function Home() {
           border: '1px solid #eaeaea',
           marginBottom: '20px' 
         }}>
-          <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>Welcome</h2>
-          <p>Track your DeFi positions across multiple protocols.</p>
-          <button style={{
-            marginTop: '15px',
-            padding: '10px 15px',
-            backgroundColor: '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}>
-            Sign in with Farcaster
-          </button>
+          <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>Status Information</h2>
+          <p><strong>SDK Loaded:</strong> {sdkLoaded ? '✅' : '❌'}</p>
+          <p><strong>In Frame:</strong> {isInFrame ? '✅' : '❌'}</p>
+          <p><strong>Ready Called:</strong> {readyCalled ? '✅' : '❌'}</p>
+          {error && (
+            <p style={{ color: 'red' }}><strong>Error:</strong> {error}</p>
+          )}
         </div>
         
         <div style={{ 
@@ -91,7 +136,7 @@ export default function Home() {
           marginBottom: '15px' 
         }}>
           <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>App Status</h3>
-          <p>Ready to use</p>
+          <p>{isInFrame ? 'Running in Farcaster Frame' : 'Running in browser'}</p>
         </div>
       </div>
     </>
