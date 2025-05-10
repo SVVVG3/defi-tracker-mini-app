@@ -1,37 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Head from 'next/head';
 
+// This is a static page that will load quickly before any JavaScript
 export default function Home() {
-  const [sdkStatus, setSdkStatus] = useState('Not yet loaded');
-  
-  // Initialize SDK after content is visible
+  // Mount effect for client-side initialization
   useEffect(() => {
-    // Add a delay to ensure content renders first
-    const timer = setTimeout(async () => {
+    // Try to initialize SDK in a non-blocking way
+    const initSDK = async () => {
       try {
-        // Load SDK only after content is visible
         const { sdk } = await import('@farcaster/frame-sdk');
-        setSdkStatus('SDK loaded, calling ready()');
         
-        // Call ready
+        // Call ready immediately - the KEY is to call it as early as possible
+        // Not waiting for any state changes or checks
         try {
           await sdk.actions.ready({ disableNativeGestures: true });
-          setSdkStatus('Ready called successfully');
+          console.log('Ready called');
         } catch (e) {
-          setSdkStatus('Ready call failed: ' + (e instanceof Error ? e.message : String(e)));
+          console.error('Ready call failed:', e);
         }
       } catch (e) {
-        setSdkStatus('Failed to load SDK: ' + (e instanceof Error ? e.message : String(e)));
+        console.error('Failed to load SDK:', e);
       }
-    }, 1000); // 1 second delay
-    
-    return () => clearTimeout(timer);
+    };
+
+    // Start initializing without blocking rendering
+    initSDK();
   }, []);
 
   return (
     <>
       <Head>
-        <title>DeFi Position Tracker | Farcaster Mini App</title>
+        <title>DeFi Position Tracker</title>
         <meta name="description" content="Track your DeFi positions on Base chain" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         <meta name="fc:frame" content={JSON.stringify({
@@ -50,40 +49,49 @@ export default function Home() {
         })} />
       </Head>
       
-      {/* Ultra simple content with inline styles */}
-      <div style={{ 
+      {/* Pre-rendered HTML structure - this will be visible before any JS loads */}
+      <div style={{
         padding: '20px',
-        backgroundColor: '#FF0000', 
-        color: 'white',
-        fontSize: '24px',
-        fontWeight: 'bold',
-        minHeight: '100vh',
-        textAlign: 'center',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center'
+        fontFamily: 'Arial, sans-serif',
+        maxWidth: '600px',
+        margin: '0 auto',
+        color: '#000',
+        backgroundColor: '#fff',
+        minHeight: '100vh'
       }}>
-        <div style={{ marginBottom: '20px' }}>
-          DEFI TRACKER APP
+        <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>DeFi Position Tracker</h1>
+        
+        <div style={{ 
+          padding: '20px', 
+          backgroundColor: '#f9f9f9', 
+          borderRadius: '8px',
+          border: '1px solid #eaeaea',
+          marginBottom: '20px' 
+        }}>
+          <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>Welcome</h2>
+          <p>Track your DeFi positions across multiple protocols.</p>
+          <button style={{
+            marginTop: '15px',
+            padding: '10px 15px',
+            backgroundColor: '#0070f3',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}>
+            Sign in with Farcaster
+          </button>
         </div>
         
-        <div style={{
-          backgroundColor: '#FFFF00',
-          color: '#000000',
-          padding: '20px',
-          borderRadius: '10px',
-          marginBottom: '20px'
+        <div style={{ 
+          padding: '15px', 
+          backgroundColor: '#f9f9f9', 
+          borderRadius: '8px',
+          border: '1px solid #eaeaea',
+          marginBottom: '15px' 
         }}>
-          THIS IS A TEST CARD
-        </div>
-        
-        <div style={{
-          backgroundColor: '#FFFFFF',
-          color: '#000000',
-          padding: '20px',
-          borderRadius: '10px'
-        }}>
-          SDK Status: {sdkStatus}
+          <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>App Status</h3>
+          <p>Ready to use</p>
         </div>
       </div>
     </>
