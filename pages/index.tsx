@@ -68,6 +68,7 @@ export default function Home() {
     try {
       setStage('auth');
       setError(null);
+      console.log('Starting Farcaster authentication process...');
 
       // Get the SDK from window or dynamic import
       let sdk = typeof window !== 'undefined' && (window as any).sdk;
@@ -78,17 +79,20 @@ export default function Home() {
 
       // Generate a session ID for this auth request
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      console.log('Generated session ID:', sessionId);
       
       // Get a nonce from our server
       const nonceResponse = await axios.post('/api/auth/nonce', { sessionId });
       const { nonce } = nonceResponse.data;
       
       // Request user to sign in with Farcaster
+      console.log('Requesting user to sign with Farcaster...');
       const signInResult = await sdk.actions.signIn({
         nonce,
         domain: window.location.host,
         sessionId,
       });
+      console.log('Received sign-in result:', signInResult);
 
       // Verify the signature with our server
       const verificationResponse = await axios.post('/api/auth/verify', {
@@ -99,6 +103,7 @@ export default function Home() {
       
       // Set the authentication state
       const { token: authToken, user: userData } = verificationResponse.data;
+      console.log('Authentication successful, user:', userData);
       login(authToken, userData);
       
       // Move to the next stage
@@ -121,6 +126,7 @@ export default function Home() {
 
     try {
       setError(null);
+      console.log('Fetching connected wallets...');
       
       const result = await walletsRequest.execute({
         url: '/api/wallets',
@@ -130,9 +136,11 @@ export default function Home() {
       });
       
       if (result?.wallets?.eth) {
+        console.log('Found wallets:', result.wallets);
         setWallets(result.wallets.eth);
         setStage('positions');
       } else {
+        console.log('No Ethereum wallets found in response:', result);
         setError('No Ethereum wallets found');
       }
     } catch (err: any) {
@@ -149,6 +157,7 @@ export default function Home() {
 
     try {
       setError(null);
+      console.log('Fetching positions for wallets:', wallets);
       
       await positionsRequest.execute({
         url: '/api/positions',
@@ -159,6 +168,12 @@ export default function Home() {
         params: {
           addresses: wallets,
         },
+        onSuccess: (data) => {
+          console.log('Positions loaded successfully:', data);
+        },
+        onError: (err) => {
+          console.error('Failed to load positions:', err);
+        }
       });
     } catch (err: any) {
       console.error('Failed to fetch positions:', err);
@@ -197,7 +212,18 @@ export default function Home() {
           // Check if we're in a frame environment AFTER calling ready()
           try {
             const inFrame = await sdk.isInMiniApp();
-            if (isMounted) setIsInFrame(inFrame);
+            if (isMounted) {
+              setIsInFrame(inFrame);
+              
+              // Auto-authenticate when in Farcaster mini app environment
+              if (inFrame && !isAuthenticated && stage === 'init') {
+                console.log('Detected Farcaster mini app environment, auto-authenticating...');
+                // Small delay to ensure UI is rendered before starting auth
+                setTimeout(() => {
+                  handleSignIn();
+                }, 500);
+              }
+            }
           } catch (e) {
             if (isMounted) setSdkError(`Frame detection error: ${e instanceof Error ? e.message : String(e)}`);
           }
@@ -445,10 +471,66 @@ export default function Home() {
             </div>
           )}
           
-          {/* Error state */}
-          {error && stage !== 'auth' && (
-            <div style={{ marginTop: '20px', padding: '10px', backgroundColor: 'rgba(255, 59, 48, 0.1)', borderRadius: '6px' }}>
-              <p style={{ color: '#FF3B30', margin: 0 }}>{error}</p>
+          {/* Error state - add more detailed error information */}
+          {(error || walletsRequest.error || positionsRequest.error) && (
+            <div style={{ 
+              marginTop: '20px', 
+              padding: '10px', 
+              backgroundColor: 'rgba(255, 59, 48, 0.1)', 
+              borderRadius: '6px',
+              fontSize: '12px'
+            }}>
+              <h3 style={{ fontSize: '14px', margin: '0 0 8px 0' }}>Debug Information</h3>
+              
+              {error && (
+                <p style={{ color: '#FF3B30', margin: '0 0 5px 0' }}><strong>Error:</strong> {error}</p>
+              )}
+              
+              {walletsRequest.error && (
+                <div style={{ margin: '5px 0' }}>
+                  <p style={{ color: '#FF3B30', margin: '0' }}><strong>Wallets Error:</strong> {walletsRequest.error.message}</p>
+                  {walletsRequest.error.response && (
+                    <pre style={{ 
+                      margin: '3px 0', 
+                      padding: '5px', 
+                      backgroundColor: 'rgba(0,0,0,0.05)', 
+                      fontSize: '10px', 
+                      overflow: 'auto',
+                      maxHeight: '100px'
+                    }}>
+                      Status: {walletsRequest.error.response.status} {walletsRequest.error.response.statusText}
+                      {walletsRequest.error.response.data ? 
+                        `\nData: ${JSON.stringify(walletsRequest.error.response.data, null, 2)}` : ''}
+                    </pre>
+                  )}
+                </div>
+              )}
+              
+              {positionsRequest.error && (
+                <div style={{ margin: '5px 0' }}>
+                  <p style={{ color: '#FF3B30', margin: '0' }}><strong>Positions Error:</strong> {positionsRequest.error.message}</p>
+                  {positionsRequest.error.response && (
+                    <pre style={{ 
+                      margin: '3px 0', 
+                      padding: '5px', 
+                      backgroundColor: 'rgba(0,0,0,0.05)', 
+                      fontSize: '10px', 
+                      overflow: 'auto',
+                      maxHeight: '100px'
+                    }}>
+                      Status: {positionsRequest.error.response.status} {positionsRequest.error.response.statusText}
+                      {positionsRequest.error.response.data ? 
+                        `\nData: ${JSON.stringify(positionsRequest.error.response.data, null, 2)}` : ''}
+                    </pre>
+                  )}
+                </div>
+              )}
+              
+              <p style={{ margin: '5px 0 0 0', fontSize: '11px' }}>
+                <strong>Current Stage:</strong> {stage} | 
+                <strong>Auth:</strong> {isAuthenticated ? '✅' : '❌'} | 
+                <strong>Wallets:</strong> {wallets.length}
+              </p>
             </div>
           )}
         </div>
